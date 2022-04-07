@@ -1,0 +1,7 @@
+*
+*/**
+**/.DS_Store
+!package.json
+!README.md
+!LICENSE.txt
+!out/extension.js
