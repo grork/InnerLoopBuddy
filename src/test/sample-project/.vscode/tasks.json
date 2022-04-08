@@ -28,7 +28,7 @@
             },
             "problemMatcher": [ ],
             "label": "Build",
-            "detail": "Compiles the TS files into the output folder",
+            "detail": "Copies output files to the output folder",
             "presentation": {
                 "echo": true,
                 "reveal": "always",
@@ -41,7 +41,8 @@
         },
         {
             "type": "npm",
-            "label": "Serve files with automatic browser loading",
+            "label": "Serve",
+            "detail": "Serve files with automatic browser loading",
             "script": "serve",
             "isBackground": true,
             "presentation": {
