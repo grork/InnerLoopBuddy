@@ -7,7 +7,8 @@
 			"request": "launch",
 			"args": [
 				"--disable-extensions",
-				"--extensionDevelopmentPath=${workspaceFolder}"
+				"--extensionDevelopmentPath=${workspaceFolder}",
+				"${workspaceFolder}/src/test/sample-project"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
@@ -21,7 +22,8 @@
 			"args": [
 				"--disable-extensions",
 				"--extensionDevelopmentPath=${workspaceFolder}",
-				"--extensionTestsPath=${workspaceFolder}/out/test/suite/index"
+				"--extensionTestsPath=${workspaceFolder}/out/test/suite/index",
+				"${workspaceFolder}/src/test/sample-project"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/test/**/*.js"

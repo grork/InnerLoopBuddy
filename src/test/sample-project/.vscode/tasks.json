@@ -1,0 +1,61 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "command": "npm install",
+            "group": {
+                "kind": "none"
+            },
+            "problemMatcher": [ ],
+            "label": "install",
+            "detail": "installs NPM",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+        },
+        {
+            "type": "npm",
+            "script": "build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [ ],
+            "label": "Build",
+            "detail": "Compiles the TS files into the output folder",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "dependsOn": [ "install" ]
+        },
+        {
+            "type": "npm",
+            "label": "Serve files with automatic browser loading",
+            "script": "serve",
+            "isBackground": true,
+            "presentation": {
+                "echo": false,
+                "reveal": "never",
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "group": "watching"
+            },
+            "problemMatcher": [],
+            "runOptions": {
+                "runOn": "folderOpen"
+            },
+            "dependsOn": [ "Build" ]
+        },
+    ]
+}

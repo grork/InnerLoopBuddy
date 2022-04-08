@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 suite('Extension Test Suite', () => {
 	vscode.window.showInformationMessage('Start all tests.');
 
-	test('Sample test', () => {
-		assert.strictEqual(true, true);
+	test('Sample Workspace was opened', () => {
+		assert.strictEqual(vscode.workspace.name, "sample-project");
 	});
 });
