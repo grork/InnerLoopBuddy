@@ -2,10 +2,16 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import fetch from "node-fetch";
 
-type Maybe<T> = T | null;
+import { findTask } from "../../extension";
 
 const SERVE_TASK_TYPE = "npm";
 const SERVE_TASK_SCRIPT = "serve";
+const SERVE_TASK_CRITERIA = {
+    "definition": {
+        "type": SERVE_TASK_TYPE,
+        "script": SERVE_TASK_SCRIPT
+    }
+};
 
 // Helper to allow 'sleeping' in a test
 function delay(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)) }
@@ -19,35 +25,26 @@ suite("Extension Test Suite", () => {
     });
 
     test("Opened workspace has appropriate serve task", async () => {
-        const foundTasks = await vscode.tasks.fetchTasks({ type: "npm" });
-        let serveTask: Maybe<vscode.Task> = null;
+        const serveTask = await findTask(SERVE_TASK_CRITERIA);
 
-        for (const task of foundTasks) {
-            if (!task.definition || task.definition.type !== SERVE_TASK_TYPE || task.definition["script"] !== SERVE_TASK_SCRIPT) {
-                continue;
-            }
-
-            serveTask = task;
-        }
-
-        assert.ok(!!serveTask, "Serve task not found")
+        assert.ok(!!serveTask, "Serve task not found");
+        assert.strictEqual(serveTask.definition.type, "npm");
+        assert.strictEqual(serveTask.definition.script, "serve");
     });
 
     test("Execute Serve Task & Terminate", async () => {
-        const foundTasks = await vscode.tasks.fetchTasks({ type: "npm" });
-        let serveTask: Maybe<vscode.Task> = null;
-
-        for (const task of foundTasks) {
-            if (!task.definition || task.definition.type !== SERVE_TASK_TYPE || task.definition["script"] !== SERVE_TASK_SCRIPT) {
-                continue;
-            }
-
-            serveTask = task;
-        }
+        const serveTask = await findTask(SERVE_TASK_CRITERIA);
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
-        await delay(5000); // Wait for the service to actually startup
-        const testData: { readyForTest: boolean } = <any>await (await fetch("http://localhost:3000/test.json")).json();
+        let testData = { readyForTest: false };
+
+        for (let i = 0; i < 5000; i += 100) {
+            try {
+                testData = <any>await (await fetch("http://localhost:3000/test.json")).json();
+            } catch {
+                await delay(100); // Wait for the service to actually startup
+            }
+        }
         
         assert.ok(testData.readyForTest);
         runningTask.terminate();
