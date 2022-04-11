@@ -57,8 +57,7 @@ export class TaskMonitor {
      * that match the supplied criteria.
      * @param criteria 
      */
-    constructor(private criteria: TaskCriteria)
-    {
+    constructor(private criteria: TaskCriteria) {
         vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this._subscriptions);
         this._completionPromise = new Promise((resolve, _) => {
             this._resolvePromise = resolve;
