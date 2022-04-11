@@ -19,8 +19,8 @@ type Maybe<T> = T | undefined;
  * @param criteria Criteria to search for in the task 
  * @returns True if the task matches the criteria
  */
-function isTargetTask(task: vscode.Task, criteria: TaskCriteria): boolean {
-    return _.isMatch(task, criteria);
+function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): boolean {
+    return criteria.some((c) => _.isMatch(task, c));
 }
 
 /**
@@ -28,7 +28,7 @@ function isTargetTask(task: vscode.Task, criteria: TaskCriteria): boolean {
  * @param criteria Criteria to find a matching task
  * @returns Promise containing the task if there is a match; undefined otherwise.
  */
-export async function findTargetTask(criteria: TaskCriteria): Promise<Maybe<vscode.Task>> {
+export async function findTargetTask(criteria: TaskCriteria[]): Promise<Maybe<vscode.Task>> {
     const foundTasks = await vscode.tasks.fetchTasks();
     return foundTasks.find((task) => isTargetTask(task, criteria));
 }
@@ -39,7 +39,7 @@ export async function findTargetTask(criteria: TaskCriteria): Promise<Maybe<vsco
  * @param criteria Criteria to find a matching task
  * @returns The matching criteria, if found.
  */
-export function isTargetTaskRunning(criteria: TaskCriteria): Maybe<boolean> {
+export function isTargetTaskRunning(criteria: TaskCriteria[]): Maybe<boolean> {
     return !!vscode.tasks.taskExecutions.find((executingTask:vscode.TaskExecution) => isTargetTask(executingTask.task, criteria));
 }
 
@@ -57,7 +57,7 @@ export class TaskMonitor {
      * that match the supplied criteria.
      * @param criteria 
      */
-    constructor(private criteria: TaskCriteria) {
+    constructor(private criteria: TaskCriteria[]) {
         vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this._subscriptions);
         this._completionPromise = new Promise((resolve, _) => {
             this._resolvePromise = resolve;

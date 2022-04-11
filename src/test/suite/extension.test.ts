@@ -29,7 +29,7 @@ async function testSiteIsAvailable(): Promise<boolean> {
             await delay(DELAY_INCREMENT); // Wait for the service to actually startup
         }
     }
-    
+
     return testData.readyForTest;
 }
 
@@ -45,7 +45,7 @@ async function testSiteIsUnavailable(): Promise<boolean> {
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -58,7 +58,7 @@ suite("Workspace under-test configuration validation", function () {
     });
 
     test("Opened workspace has appropriate serve task", async () => {
-        const serveTask = await impl.findTargetTask(SERVE_TASK_CRITERIA);
+        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
 
         assert.ok(!!serveTask, "Serve task not found");
         assert.strictEqual(serveTask.definition.type, "npm");
@@ -66,7 +66,7 @@ suite("Workspace under-test configuration validation", function () {
     });
 
     test("Serve Task starts sample site", async () => {
-        const serveTask = await impl.findTargetTask(SERVE_TASK_CRITERIA);
+        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
@@ -81,33 +81,32 @@ suite("Task Discovery & Monitoring", function () {
     this.timeout(20 * 1000);
 
     test("Already executing task can be discovered", async () => {
-        assert.ok(!impl.isTargetTaskRunning(SERVE_TASK_CRITERIA),
+        assert.ok(!impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]),
             "task should not be running");
-        
-        const serveTask = await impl.findTargetTask(SERVE_TASK_CRITERIA);
+
+        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
 
-        assert.ok(impl.isTargetTaskRunning(SERVE_TASK_CRITERIA));
-
+        assert.ok(impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]));
         runningTask.terminate();
 
         assert.ok(await testSiteIsUnavailable());
     });
 
     test("When a task is not started, promise completes when started", async () => {
-        const monitor = new impl.TaskMonitor(SERVE_TASK_CRITERIA);
-        const serveTask = await impl.findTargetTask(SERVE_TASK_CRITERIA);
+        const monitor = new impl.TaskMonitor([SERVE_TASK_CRITERIA]);
+        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
         let didObserveTaskStarting = false;
         const taskStartedPromise = monitor.waitForTask().then(() => didObserveTaskStarting = true);
 
-        assert.ok(!impl.isTargetTaskRunning(SERVE_TASK_CRITERIA),
+        assert.ok(!impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]),
             "task should not be running");
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
-        assert.ok(impl.isTargetTaskRunning(SERVE_TASK_CRITERIA));
+        assert.ok(impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]));
 
         runningTask.terminate();
 
@@ -117,17 +116,45 @@ suite("Task Discovery & Monitoring", function () {
         assert.ok(didObserveTaskStarting);
     });
 
-    test("Promise is completed on construction if task is already started", async () => {
-        const serveTask = await impl.findTargetTask(SERVE_TASK_CRITERIA);
+    test("Promise doesn't complete for non-matching task", async () => {
+        const monitor = new impl.TaskMonitor([SERVE_TASK_CRITERIA]);
+        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
+        let targetTaskExecutionCount = 0;
+        const taskStartedPromise = monitor.waitForTask().then(() => targetTaskExecutionCount += 1);
 
-        assert.ok(!impl.isTargetTaskRunning(SERVE_TASK_CRITERIA),
+        assert.ok(!impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]),
+            "task should not be running");
+        
+        const testShellTask = await impl.findTargetTask([{ "definition": { "type": "shell" }, "name": "testshelltask" }]);
+        assert.ok(!!testShellTask, "Test Shell Task not found");
+
+        const executingShellTask = await vscode.tasks.executeTask(testShellTask);
+        executingShellTask.terminate();
+
+        // Now run the serve task
+        const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
+        assert.ok(await testSiteIsAvailable());
+        assert.ok(impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]));
+
+        runningTask.terminate();
+
+        assert.ok(await testSiteIsUnavailable());
+
+        await taskStartedPromise;
+        assert.strictEqual(targetTaskExecutionCount, 1);
+    });
+
+    test("Promise is completed on construction if task is already started", async () => {
+        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
+
+        assert.ok(!impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]),
             "task should not be running");
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
-        assert.ok(impl.isTargetTaskRunning(SERVE_TASK_CRITERIA));
+        assert.ok(impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]));
 
-        const monitor = new impl.TaskMonitor(SERVE_TASK_CRITERIA);
+        const monitor = new impl.TaskMonitor([SERVE_TASK_CRITERIA]);
         let didObserveTaskStarting = false;
         await monitor.waitForTask().then(() => didObserveTaskStarting = true);
 
