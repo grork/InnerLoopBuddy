@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import fetch from "node-fetch";
 
-import { findTask } from "../../extension";
+import * as impl from "../../extension";
 
 const SERVE_TASK_TYPE = "npm";
 const SERVE_TASK_SCRIPT = "serve";
@@ -40,7 +40,7 @@ suite("Workspace under-test configuration validation", () => {
     });
 
     test("Opened workspace has appropriate serve task", async () => {
-        const serveTask = await findTask(SERVE_TASK_CRITERIA);
+        const serveTask = await impl.findTargetTask(SERVE_TASK_CRITERIA);
 
         assert.ok(!!serveTask, "Serve task not found");
         assert.strictEqual(serveTask.definition.type, "npm");
@@ -48,11 +48,26 @@ suite("Workspace under-test configuration validation", () => {
     });
 
     test("Serve Task starts sample site", async () => {
-        const serveTask = await findTask(SERVE_TASK_CRITERIA);
+        const serveTask = await impl.findTargetTask(SERVE_TASK_CRITERIA);
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
 
         runningTask.terminate();
     }).timeout(20 * 1000);
+});
+
+suite("Task Discovery & Monitoring", function () {
+    this.timeout(20 * 1000);
+
+    test("Already executing task can be discovered", async () => {
+        const serveTask = await impl.findTargetTask(SERVE_TASK_CRITERIA);
+
+        const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
+        assert.ok(await testSiteIsAvailable());
+
+        assert.ok(impl.isTargetTaskRunning(SERVE_TASK_CRITERIA));
+
+        runningTask.terminate();
+    });
 });

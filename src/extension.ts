@@ -8,21 +8,15 @@ import * as _ from "lodash";
  */
 type TaskCriteria = { [name: string]: any };
 
-type Maybe<T> = T | null;
+type Maybe<T> = T | undefined;
 
-export async function findTask(criteria: TaskCriteria): Promise<Maybe<vscode.Task>> {
+export async function findTargetTask(criteria: TaskCriteria): Promise<Maybe<vscode.Task>> {
     const foundTasks = await vscode.tasks.fetchTasks();
-    let foundTask: Maybe<vscode.Task> = null;
+    return foundTasks.find((task) => _.isMatch(task, criteria));
+}
 
-    for (const task of foundTasks) {
-        if (!_.isMatch(task, criteria)) {
-            continue;
-        }
-
-        foundTask = task;
-    }
-
-    return foundTask;
+export function isTargetTaskRunning(criteria: TaskCriteria): Maybe<boolean> {
+    return !!vscode.tasks.taskExecutions.find((executingTask:vscode.TaskExecution) => _.isMatch(executingTask.task, criteria));
 }
 
 export function activate(context: vscode.ExtensionContext) {
