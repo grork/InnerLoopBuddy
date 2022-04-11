@@ -63,6 +63,17 @@ export class TaskMonitor {
         this._completionPromise = new Promise((resolve, _) => {
             this._resolvePromise = resolve;
         });
+
+        if (isTargetTaskRunning(criteria)) {
+            this._resolvePromise!();
+            this.dispose();
+        }
+    }
+
+    dispose() {
+        this._subscriptions.forEach((d) => d.dispose());
+        this._subscriptions = [];
+        this._resolvePromise = () => { };
     }
 
     /**
@@ -82,6 +93,7 @@ export class TaskMonitor {
         }
 
         this._resolvePromise!();
+        this.dispose();
     }
 }
 

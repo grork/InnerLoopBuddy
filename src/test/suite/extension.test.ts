@@ -116,4 +116,25 @@ suite("Task Discovery & Monitoring", function () {
         await taskStartedPromise;
         assert.ok(didObserveTaskStarting);
     });
+
+    test("Promise is completed on construction if task is already started", async () => {
+        const serveTask = await impl.findTargetTask(SERVE_TASK_CRITERIA);
+
+        assert.ok(!impl.isTargetTaskRunning(SERVE_TASK_CRITERIA),
+            "task should not be running");
+
+        const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
+        assert.ok(await testSiteIsAvailable());
+        assert.ok(impl.isTargetTaskRunning(SERVE_TASK_CRITERIA));
+
+        const monitor = new impl.TaskMonitor(SERVE_TASK_CRITERIA);
+        let didObserveTaskStarting = false;
+        await monitor.waitForTask().then(() => didObserveTaskStarting = true);
+
+        runningTask.terminate();
+
+        assert.ok(await testSiteIsUnavailable());
+
+        assert.ok(didObserveTaskStarting);
+    });
 });
