@@ -13,13 +13,28 @@ const SERVE_TASK_CRITERIA = {
     }
 };
 
-// Helper to allow 'sleeping' in a test
-function delay(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)) }
+/**
+ * Helper to allow 'sleeping' in a test
+ * */
+function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)) }
+
+async function testSiteIsAvailable(): Promise<boolean> {
+    let testData = { readyForTest: false };
+    const DELAY_INCREMENT = 100;
+
+    for (let i = 0; i < 5000; i += DELAY_INCREMENT) {
+        try {
+            testData = <any>await (await fetch("http://localhost:3000/test.json")).json();
+        } catch {
+            await delay(DELAY_INCREMENT); // Wait for the service to actually startup
+        }
+    }
+    
+    return testData.readyForTest;
+}
 
 
-suite("Extension Test Suite", () => {
-    vscode.window.showInformationMessage("Start all tests.");
-
+suite("Workspace under-test configuration validation", () => {
     test("Sample workspace was opened", () => {
         assert.strictEqual(vscode.workspace.name, "sample-project");
     });
@@ -32,21 +47,12 @@ suite("Extension Test Suite", () => {
         assert.strictEqual(serveTask.definition.script, "serve");
     });
 
-    test("Execute Serve Task & Terminate", async () => {
+    test("Serve Task starts sample site", async () => {
         const serveTask = await findTask(SERVE_TASK_CRITERIA);
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
-        let testData = { readyForTest: false };
+        assert.ok(await testSiteIsAvailable());
 
-        for (let i = 0; i < 5000; i += 100) {
-            try {
-                testData = <any>await (await fetch("http://localhost:3000/test.json")).json();
-            } catch {
-                await delay(100); // Wait for the service to actually startup
-            }
-        }
-        
-        assert.ok(testData.readyForTest);
         runningTask.terminate();
     }).timeout(20 * 1000);
 });
