@@ -51,6 +51,28 @@
                         "title": "URL to open the browser too",
                         "type": "string",
                         "default": null
+                    },
+                    "codevoid.simplebrowser-helper-extension.monitoredTasks": {
+                        "title": "Task information to match for starting the browser",
+                        "type": "array",
+                        "items": {
+                            "type": "object"
+                        }
+                    },
+                    "codevoid.simplebrowser-helper-extension.taskBehaviour": {
+                        "title": "How to monitor tasks for execution",
+                        "type": "string",
+                        "default": "session",
+                        "enum": [
+                            "manual",
+                            "session",
+                            "everyTime"
+                        ],
+                        "enumDescriptions": [
+                            "Only open when manually invoked",
+                            "Open at most once per session",
+                            "Open every time a matching task is started"
+                        ]
                     }
                 }
             }
