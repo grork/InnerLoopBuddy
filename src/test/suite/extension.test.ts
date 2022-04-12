@@ -114,6 +114,7 @@ suite("Task Discovery & Monitoring", function () {
 
         await taskStartedPromise;
         assert.ok(didObserveTaskStarting);
+        monitor.dispose();
     });
 
     test("Promise doesn't complete for non-matching task", async () => {
@@ -142,6 +143,7 @@ suite("Task Discovery & Monitoring", function () {
 
         await taskStartedPromise;
         assert.strictEqual(targetTaskExecutionCount, 1);
+        monitor.dispose();
     });
 
     test("Promise is completed on construction if task is already started", async () => {
@@ -163,5 +165,6 @@ suite("Task Discovery & Monitoring", function () {
         assert.ok(await testSiteIsUnavailable());
 
         assert.ok(didObserveTaskStarting);
+        monitor.dispose();
     });
 });
