@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import * as _ from "lodash";
 
+const EXTENSION_ID = "codevoid.simplebrowser-helper-extension";
+
 /**
  * The information to match a specific task when trying to open a browser. The
  * information is "deep equality" checked against the `vscode.Task` instance. If
@@ -97,8 +99,8 @@ export class TaskMonitor {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    let disposable = vscode.commands.registerCommand("simplebrowser-helper-extension.openDefaultUrl", () => {
-        const config = vscode.workspace.getConfiguration("codevoid.simplebrowser-helper-extension");
+    let disposable = vscode.commands.registerCommand(`${EXTENSION_ID}.openDefaultUrl`, () => {
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
         const defaultBrowserUrl = <string>config.get("defaultUrl");
         if (!defaultBrowserUrl) {
             return;

@@ -38,7 +38,7 @@
     "contributes": {
         "commands": [
             {
-                "command": "simplebrowser-helper-extension.openDefaultUrl",
+                "command": "codevoid.simplebrowser-helper-extension.openDefaultUrl",
                 "title": "Open Default URL",
                 "category": "Simple Browser Helper"
             }
