@@ -1,7 +1,12 @@
 import * as vscode from "vscode";
 import * as _ from "lodash";
 
-const EXTENSION_ID = "codevoid.simplebrowser-helper-extension";
+export const EXTENSION_ID = "codevoid.simplebrowser-helper-extension";
+export const DEFAULT_URL_SETTING_SECTION = "defaultUrl"
+export const MONITORED_TASKS_SETTING_SECTION = "monitoredTasks";
+export const TASK_BEHAVIOUR_SETTING_SECTION = "taskBehavior";
+export const OPEN_BROWSER_COMMAND_ID = `${EXTENSION_ID}.openDefaultUrl`;
+
 const SHOW_SETTINGS_BUTTON = "Configure in settings";
 
 /**
@@ -103,29 +108,30 @@ export class TaskMonitor {
  * Extension instance that manages the lifecycle of an extension in vscode.
  */
 export class SimpleBrowserHelperExtension {
-    openSimpleBrowser(): void {
+    openSimpleBrowser(): Thenable<boolean> {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID);
         const defaultBrowserUrl = <string>config.get("defaultUrl");
         if (!defaultBrowserUrl) {
             vscode.window.showInformationMessage("No default URL configured", SHOW_SETTINGS_BUTTON).then((result) => {
                 if (result === SHOW_SETTINGS_BUTTON) {
                     // Show the settings page prefiltered to our settings
-                    vscode.commands.executeCommand("workbench.action.openSettings2", { "query": `${EXTENSION_ID}.defaultUrl` });
+                    vscode.commands.executeCommand("workbench.action.openSettings2", { "query": `${EXTENSION_ID}.${DEFAULT_URL_SETTING_SECTION}` });
                     return;
                 }
 
                 // Dismissed, so do nothing
                 return;
             });
-            return;
+
+            return Promise.resolve(false);
         }
 
-        vscode.commands.executeCommand("simpleBrowser.api.open", vscode.Uri.parse(defaultBrowserUrl));
+        return vscode.commands.executeCommand("simpleBrowser.api.open", vscode.Uri.parse(defaultBrowserUrl)).then(() => true);
     }
 }
 
 export function activate(context: vscode.ExtensionContext) {
     const instance = new SimpleBrowserHelperExtension();
 
-    context.subscriptions.push(vscode.commands.registerCommand(`${EXTENSION_ID}.openDefaultUrl`, () => instance.openSimpleBrowser()));
+    context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, () => instance.openSimpleBrowser()));
 }

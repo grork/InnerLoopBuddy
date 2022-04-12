@@ -59,7 +59,7 @@
                             "type": "object"
                         }
                     },
-                    "codevoid.simplebrowser-helper-extension.taskBehaviour": {
+                    "codevoid.simplebrowser-helper-extension.taskBehavior": {
                         "title": "How to monitor tasks for execution",
                         "type": "string",
                         "default": "session",

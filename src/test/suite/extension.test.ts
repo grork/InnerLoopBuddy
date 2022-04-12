@@ -49,9 +49,28 @@ async function testSiteIsUnavailable(): Promise<boolean> {
     return false;
 }
 
+async function clearExtensionSettings(): Promise<void> {
+    const workspaceFolder = (vscode.workspace.workspaceFolders)![0]; // assume one workspace folder in our sample project
+    const configuration = vscode.workspace.getConfiguration(impl.EXTENSION_ID, workspaceFolder);
+
+    await configuration.update(impl.DEFAULT_URL_SETTING_SECTION, undefined);
+    await configuration.update(impl.MONITORED_TASKS_SETTING_SECTION, undefined);
+    await configuration.update(impl.TASK_BEHAVIOUR_SETTING_SECTION, undefined);
+}
+
+async function applyExtensionSettings(explicitSettings: any): Promise<void> {
+    const workspaceFolder = (vscode.workspace.workspaceFolders)![0]; // assume one workspace folder in our sample project
+    const configuration = vscode.workspace.getConfiguration(impl.EXTENSION_ID, workspaceFolder);
+
+    await configuration.update(impl.DEFAULT_URL_SETTING_SECTION, explicitSettings.defaultUrl);
+    await configuration.update(impl.MONITORED_TASKS_SETTING_SECTION, explicitSettings.monitoredTasks);
+    await configuration.update(impl.TASK_BEHAVIOUR_SETTING_SECTION, explicitSettings.taskBehavior);
+}
 
 suite("Workspace under-test configuration validation", function () {
     this.timeout(20 * 1000);
+
+    this.beforeEach(async () => await clearExtensionSettings());
 
     test("Sample workspace was opened", () => {
         assert.strictEqual(vscode.workspace.name, "sample-project");
@@ -79,6 +98,8 @@ suite("Workspace under-test configuration validation", function () {
 
 suite("Task Discovery & Monitoring", function () {
     this.timeout(20 * 1000);
+
+    this.beforeEach(async () => await clearExtensionSettings());
 
     test("Already executing task can be discovered", async () => {
         assert.ok(!impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]),
@@ -168,3 +189,25 @@ suite("Task Discovery & Monitoring", function () {
         monitor.dispose();
     });
 });
+
+suite("Command Handling", function () {
+    this.timeout(20 * 1000);
+    
+    this.beforeEach(async () => await clearExtensionSettings());
+
+    test("Browser Opens via Command", async () => {
+        await applyExtensionSettings({
+            defaultUrl: "http://localhost:3000"
+        });
+
+        assert.ok(await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID));
+        await delay(1 * 1000);
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    });
+
+    test("Browser doesn't open via Command when no URL set", async () => {
+        assert.ok(!await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID));
+        await delay(1 * 1000);
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    });
+})
