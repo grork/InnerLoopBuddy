@@ -218,4 +218,4 @@ suite("Command Handling", function () {
         await delay(1 * 1000);
         await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
     });
-})
+});
