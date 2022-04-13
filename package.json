@@ -73,12 +73,12 @@
                     "codevoid.simplebrowser-helper-extension.taskBehavior": {
                         "title": "How to monitor tasks for execution",
                         "type": "string",
-                        "default": "session",
+                        "default": "onetime",
                         "scope": "resource",
                         "enum": [
-                            "manual",
-                            "session",
-                            "everyTime"
+                            "none",
+                            "onetime",
+                            "everytime"
                         ],
                         "enumDescriptions": [
                             "Only open when manually invoked",

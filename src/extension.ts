@@ -10,6 +10,28 @@ export const OPEN_BROWSER_COMMAND_ID = `${EXTENSION_ID}.openDefaultUrl`;
 const SHOW_SETTINGS_BUTTON = "Configure in settings";
 
 /**
+ * What type of monitoring should happen
+ */
+const enum MonitoringType {
+    /**
+     * There is no monitoring, and only manual command invocation is available
+     */
+    None = "none",
+
+    /**
+     * The first time the task executes, or if it's already running on extension
+     * startup
+     */
+    OneTime = "onetime",
+    
+    /**
+     * Every time the task executes, and if it's already running on extension
+     * startup
+     */
+    Everytime = "everytime"
+}
+
+/**
  * The information to match a specific task when trying to open a browser. The
  * information is "deep equality" checked against the `vscode.Task` instance. If
  * and only if all the propertie are present, *and* those properties match.
