@@ -137,9 +137,9 @@ async function getConfigurationScopeFromActiveEditor(probeSetting: string): Prom
  * criteria completes the promise available in waitForTask.
  */
 export class TaskMonitor {
-    private _subscriptions: { dispose(): any }[] = [];
-    private _completionPromise: Promise<void>;
-    private _resolvePromise?: () => void;
+    private subscriptions: { dispose(): any }[] = [];
+    private completionPromise: Promise<void>;
+    private resolvePromise?: () => void;
     
     /**
      * Constructs a new instance and *starts monitoring* for task executions
@@ -147,21 +147,21 @@ export class TaskMonitor {
      * @param criteria 
      */
     constructor(private criteria: TaskCriteria[]) {
-        vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this._subscriptions);
-        this._completionPromise = new Promise((resolve, _) => {
-            this._resolvePromise = resolve;
+        vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this.subscriptions);
+        this.completionPromise = new Promise((resolve, _) => {
+            this.resolvePromise = resolve;
         });
 
         if (isTargetTaskRunning(criteria)) {
-            this._resolvePromise!();
+            this.resolvePromise!();
             this.dispose();
         }
     }
 
     dispose() {
-        this._subscriptions.forEach((d) => d.dispose());
-        this._subscriptions = [];
-        this._resolvePromise = () => { };
+        this.subscriptions.forEach((d) => d.dispose());
+        this.subscriptions = [];
+        this.resolvePromise = () => { };
     }
 
     /**
@@ -171,7 +171,7 @@ export class TaskMonitor {
      * @returns Promise that completes when the task starts
      */
     waitForTask(): Promise<void> {
-        return this._completionPromise;
+        return this.completionPromise;
     }
 
     private handleTaskStarting(e: vscode.TaskStartEvent): void {
@@ -180,7 +180,7 @@ export class TaskMonitor {
             return;
         }
 
-        this._resolvePromise!();
+        this.resolvePromise!();
         this.dispose();
     }
 }
