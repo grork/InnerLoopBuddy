@@ -36,7 +36,22 @@ const enum MonitoringType {
  * information is "deep equality" checked against the `vscode.Task` instance. If
  * and only if all the propertie are present, *and* those properties match.
  */
-type TaskCriteria = { [name: string]: any };
+export type TaskCriteria = { [name: string]: any };
+
+/**
+ * Helper type since the TaskScope in vscode.d.ts isn't exported, we need our own
+ */
+export type ActualTaskScope = vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder | undefined;
+
+/**
+ * Callback that given an ActualTaskScope will return task criteria *only* for
+ * that scope.
+ * 
+ * Why have this at all? Tasks are defined at multiple levels -- global,
+ * workspace, and folder. We want to match task criteria that is releveant e.g.
+ * that which is defined for the scope the task is sourced from.
+ */
+type TaskCriteriaResolver = (e: ActualTaskScope) => TaskCriteria[];
 
 /**
  * Type container for an instance or undefined (e.g. an optional)
@@ -69,8 +84,11 @@ export async function findTargetTask(criteria: TaskCriteria[]): Promise<Maybe<vs
  * @param criteria Criteria to find a matching task
  * @returns The matching criteria, if found.
  */
-export function isTargetTaskRunning(criteria: TaskCriteria[]): Maybe<boolean> {
-    return !!vscode.tasks.taskExecutions.find((executingTask:vscode.TaskExecution) => isTargetTask(executingTask.task, criteria));
+export function isTargetTaskRunning(resolver: TaskCriteriaResolver): Maybe<boolean> {
+    return !!vscode.tasks.taskExecutions.find((executingTask: vscode.TaskExecution) => {
+        const criteria = resolver(executingTask.task.scope);
+        return isTargetTask(executingTask.task, criteria);
+    });
 }
 
 /**
@@ -94,13 +112,14 @@ async function getConfigurationScopeFromActiveEditor(probeSetting: string): Prom
         return Promise.resolve(undefined);
     }
 
-    // If there is only one workspace, lets use that
+    // If there is only one workspace, let the configuration system resolve
+    // naturally by supplying null as the context.
     if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length === 1) {
-        return Promise.resolve(vscode.workspace.workspaceFolders[0]);
+        return Promise.resolve(undefined);
     }
 
     // 1. No Editor (so no active context)
-    // 2. We have more than one folder (so we *may* have conflicting settings
+    // 2. We have more than one folder (so we *may* have conflicting settings)
     //
     // There may not be a setting on a folder, but that doesn't mean there isn't
     // one on the workspace. Because there is more than one folder, those folders
@@ -144,15 +163,16 @@ export class TaskMonitor {
     /**
      * Constructs a new instance and *starts monitoring* for task executions
      * that match the supplied criteria.
-     * @param criteria 
+     * @param criteriaResolver Called to resolve the configuration for the
+     *        executing task
      */
-    constructor(private criteria: TaskCriteria[]) {
+    constructor(private criteriaResolver: TaskCriteriaResolver) {
         vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this.subscriptions);
         this.completionPromise = new Promise((resolve, _) => {
             this.resolvePromise = resolve;
         });
 
-        if (isTargetTaskRunning(criteria)) {
+        if (isTargetTaskRunning(criteriaResolver)) {
             this.resolvePromise!();
             this.dispose();
         }
@@ -175,7 +195,8 @@ export class TaskMonitor {
     }
 
     private handleTaskStarting(e: vscode.TaskStartEvent): void {
-        if (!isTargetTask(e.execution.task, this.criteria)) {
+        const criteria = this.criteriaResolver(e.execution.task.scope);
+        if (!isTargetTask(e.execution.task, criteria)) {
             // Not our task, nothing to do
             return;
         }

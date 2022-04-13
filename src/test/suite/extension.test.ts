@@ -14,6 +14,13 @@ const SERVE_TASK_CRITERIA = {
 };
 
 /**
+ * For most tests, we just need to resolve one task, and the scope doesn't matter
+ */
+function alwaysResolveServeTask(scope: impl.ActualTaskScope): impl.TaskCriteria[] {
+    return [SERVE_TASK_CRITERIA];
+}
+
+/**
  * Helper to allow 'sleeping' in a test
  * */
 function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)) }
@@ -102,7 +109,7 @@ suite("Task Discovery & Monitoring", function () {
     this.beforeEach(async () => await clearExtensionSettings());
 
     test("Already executing task can be discovered", async () => {
-        assert.ok(!impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]),
+        assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
             "task should not be running");
 
         const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
@@ -110,24 +117,24 @@ suite("Task Discovery & Monitoring", function () {
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
 
-        assert.ok(impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]));
+        assert.ok(impl.isTargetTaskRunning(alwaysResolveServeTask));
         runningTask.terminate();
 
         assert.ok(await testSiteIsUnavailable());
     });
 
     test("When a task is not started, promise completes when started", async () => {
-        const monitor = new impl.TaskMonitor([SERVE_TASK_CRITERIA]);
+        const monitor = new impl.TaskMonitor(alwaysResolveServeTask);
         const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
         let didObserveTaskStarting = false;
         const taskStartedPromise = monitor.waitForTask().then(() => didObserveTaskStarting = true);
 
-        assert.ok(!impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]),
+        assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
             "task should not be running");
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
-        assert.ok(impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]));
+        assert.ok(impl.isTargetTaskRunning(alwaysResolveServeTask));
 
         runningTask.terminate();
 
@@ -139,12 +146,12 @@ suite("Task Discovery & Monitoring", function () {
     });
 
     test("Promise doesn't complete for non-matching task", async () => {
-        const monitor = new impl.TaskMonitor([SERVE_TASK_CRITERIA]);
+        const monitor = new impl.TaskMonitor(alwaysResolveServeTask);
         const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
         let targetTaskExecutionCount = 0;
         const taskStartedPromise = monitor.waitForTask().then(() => targetTaskExecutionCount += 1);
 
-        assert.ok(!impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]),
+        assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
             "task should not be running");
         
         const testShellTask = await impl.findTargetTask([{ "definition": { "type": "shell" }, "name": "testshelltask" }]);
@@ -156,7 +163,7 @@ suite("Task Discovery & Monitoring", function () {
         // Now run the serve task
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
-        assert.ok(impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]));
+        assert.ok(impl.isTargetTaskRunning(alwaysResolveServeTask));
 
         runningTask.terminate();
 
@@ -170,14 +177,14 @@ suite("Task Discovery & Monitoring", function () {
     test("Promise is completed on construction if task is already started", async () => {
         const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
 
-        assert.ok(!impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]),
+        assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
             "task should not be running");
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
-        assert.ok(impl.isTargetTaskRunning([SERVE_TASK_CRITERIA]));
+        assert.ok(impl.isTargetTaskRunning(alwaysResolveServeTask));
 
-        const monitor = new impl.TaskMonitor([SERVE_TASK_CRITERIA]);
+        const monitor = new impl.TaskMonitor(alwaysResolveServeTask);
         let didObserveTaskStarting = false;
         await monitor.waitForTask().then(() => didObserveTaskStarting = true);
 
@@ -194,6 +201,7 @@ suite("Command Handling", function () {
     this.timeout(20 * 1000);
     
     this.beforeEach(async () => await clearExtensionSettings());
+    this.afterEach(async () => await clearExtensionSettings());
 
     test("Browser Opens via Command", async () => {
         await applyExtensionSettings({
