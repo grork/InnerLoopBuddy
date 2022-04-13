@@ -41,8 +41,17 @@
                 "command": "codevoid.simplebrowser-helper-extension.openDefaultUrl",
                 "title": "Open Default URL",
                 "category": "Simple Browser Helper"
+                
             }
         ],
+        "menus": {
+            "commandPalette": [
+                {
+                    "command": "codevoid.simplebrowser-helper-extension.openDefaultUrl",
+                    "when": "workbenchState != 'empty'"
+                }
+            ]
+        },
         "configuration": [
             {
                 "title": "Simple Browser Helper",
@@ -50,11 +59,13 @@
                     "codevoid.simplebrowser-helper-extension.defaultUrl": {
                         "title": "URL to open the browser too",
                         "type": "string",
-                        "default": null
+                        "default": null,
+                        "scope": "resource"
                     },
                     "codevoid.simplebrowser-helper-extension.monitoredTasks": {
                         "title": "Task information to match for starting the browser",
                         "type": "array",
+                        "scope": "resource",
                         "items": {
                             "type": "object"
                         }
@@ -63,6 +74,7 @@
                         "title": "How to monitor tasks for execution",
                         "type": "string",
                         "default": "session",
+                        "scope": "resource",
                         "enum": [
                             "manual",
                             "session",

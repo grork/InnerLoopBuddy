@@ -51,6 +51,55 @@ export function isTargetTaskRunning(criteria: TaskCriteria[]): Maybe<boolean> {
     return !!vscode.tasks.taskExecutions.find((executingTask:vscode.TaskExecution) => isTargetTask(executingTask.task, criteria));
 }
 
+async function getConfigurationScopeFromActiveEditor(probeSetting: string): Promise<Maybe<vscode.ConfigurationScope>>  {
+    let context = vscode.window.activeTextEditor;
+    if (context) {
+        return Promise.resolve(context.document.uri);
+    }
+
+    if (!(vscode.workspace.workspaceFolders?.length) && !vscode.workspace.workspaceFile) {
+        // The empty workspace, so we don't have any idea what config to get
+        return Promise.resolve(undefined);
+    }
+
+    // If there is only one workspace, lets use that
+    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length === 1) {
+        return Promise.resolve(vscode.workspace.workspaceFolders[0]);
+    }
+
+    // 1. No Editor (so no active context)
+    // 2. We have more than one folder (so we *may* have conflicting settings
+    //
+    // There may not be a setting on a folder, but that doesn't mean there isn't
+    // one on the workspace. Because there is more than one folder, those folders
+    // could also be in conflict.
+    //
+    // We can determine if there is a *folder* setting by getting the configuration
+    // section and `inspect()`ing it. This tells us what the value is at each
+    // scope.
+    let settingHasValueSet = 0;
+
+    for (const folder of vscode.workspace.workspaceFolders!) {
+        const folderConfiguration = vscode.workspace.getConfiguration(EXTENSION_ID, folder);
+        const settingValueByScope = folderConfiguration.inspect(probeSetting);
+        if (settingValueByScope?.workspaceFolderValue) {
+            settingHasValueSet += 1;
+        }
+    }
+
+    if (settingHasValueSet === 0) {
+        // No per-folder settings, so return the workspaceFile scope
+        return Promise.resolve(vscode.workspace.workspaceFile);
+    }
+
+    // There wasn't an active editor, and there was more than one workspace, so
+    // show a picker to the user to allow them to chose
+    return vscode.window.showWorkspaceFolderPick({
+        placeHolder: "Workspace to open default browser for",
+        ignoreFocusOut: true,
+    });
+}
+
 /**
  * Monitors the current session to task starts, and if they match the supplied
  * criteria completes the promise available in waitForTask.
@@ -108,14 +157,14 @@ export class TaskMonitor {
  * Extension instance that manages the lifecycle of an extension in vscode.
  */
 export class SimpleBrowserHelperExtension {
-    openSimpleBrowser(): Thenable<boolean> {
-        const config = vscode.workspace.getConfiguration(EXTENSION_ID);
+    openSimpleBrowser(scope: Maybe<vscode.ConfigurationScope>): Thenable<boolean> {
+        const config = vscode.workspace.getConfiguration(EXTENSION_ID, scope);
         const defaultBrowserUrl = <string>config.get("defaultUrl");
         if (!defaultBrowserUrl) {
             vscode.window.showInformationMessage("No default URL configured", SHOW_SETTINGS_BUTTON).then((result) => {
                 if (result === SHOW_SETTINGS_BUTTON) {
                     // Show the settings page prefiltered to our settings
-                    vscode.commands.executeCommand("workbench.action.openSettings2", { "query": `${EXTENSION_ID}.${DEFAULT_URL_SETTING_SECTION}` });
+                    vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", { "query": `${EXTENSION_ID}.${DEFAULT_URL_SETTING_SECTION}` });
                     return;
                 }
 
@@ -133,5 +182,7 @@ export class SimpleBrowserHelperExtension {
 export function activate(context: vscode.ExtensionContext) {
     const instance = new SimpleBrowserHelperExtension();
 
-    context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, () => instance.openSimpleBrowser()));
+    context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => {
+        return instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION));
+    }));
 }
