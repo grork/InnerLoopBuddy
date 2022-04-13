@@ -73,6 +73,16 @@ export function isTargetTaskRunning(criteria: TaskCriteria[]): Maybe<boolean> {
     return !!vscode.tasks.taskExecutions.find((executingTask:vscode.TaskExecution) => isTargetTask(executingTask.task, criteria));
 }
 
+/**
+ * Obtains a configuration scope from an active editor, or prompts for scope if
+ * it can't be determined from the workspace itself. It does this by leveraging
+ * the editor for a resource scope, checking if we have > 1 workspace, if the
+ * probeSetting is set anywhere other than the workspace and using a picker if
+ * there are more than workspace, and we need to disambiguate
+ * @param probeSetting the configuration name that we're going to probe in the
+ *                     multiroot workspace scenario
+ * @returns 
+ */
 async function getConfigurationScopeFromActiveEditor(probeSetting: string): Promise<Maybe<vscode.ConfigurationScope>>  {
     let context = vscode.window.activeTextEditor;
     if (context) {
