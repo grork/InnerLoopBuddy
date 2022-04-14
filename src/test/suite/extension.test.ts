@@ -13,6 +13,13 @@ const SERVE_TASK_CRITERIA = {
     }
 };
 
+const ALT_SERVE_TASK_CRITERIA = {
+    "definition": {
+        "type": SERVE_TASK_TYPE,
+        "script": SERVE_TASK_SCRIPT
+    }
+};
+
 /**
  * For most tests, we just need to resolve one task, and the scope doesn't matter
  */
@@ -40,9 +47,17 @@ function waitForWorkspaceFoldersToReachTargetCount(target: number): Promise<unkn
  * @param criteria Criteria to find a matching task
  * @returns Promise containing the task if there is a match; undefined otherwise.
  */
-export async function findTargetTask(criteria: impl.TaskCriteria[]): Promise<vscode.Task | undefined> {
+export async function findTargetTask(criteria: impl.TaskCriteria[], taskScope?: impl.ActualTaskScope): Promise<vscode.Task | undefined> {
     const foundTasks = await vscode.tasks.fetchTasks();
-    return foundTasks.find((task) => impl.isTargetTask(task, criteria));
+    return foundTasks.find((task) => {
+        const isTargetTask = impl.isTargetTask(task, criteria);
+        let isTargetScope = true;
+        if (taskScope) {
+            isTargetScope = task.scope == taskScope;
+        }
+
+        return isTargetTask && isTargetScope;
+    });
 }
 
 /**
@@ -50,13 +65,13 @@ export async function findTargetTask(criteria: impl.TaskCriteria[]): Promise<vsc
  * */
 function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)) }
 
-async function testSiteIsAvailable(): Promise<boolean> {
+async function testSiteIsAvailable(fileToRetreive: string = "test.json"): Promise<boolean> {
     let testData = { readyForTest: false };
     const DELAY_INCREMENT = 100;
 
     for (let i = 0; i < 5000; i += DELAY_INCREMENT) {
         try {
-            testData = <any>await (await fetch("http://localhost:3000/test.json")).json();
+            testData = <any>await (await fetch(`http://localhost:3000/${fileToRetreive}`)).json();
         } catch {
             await delay(DELAY_INCREMENT); // Wait for the service to actually startup
         }
@@ -65,13 +80,13 @@ async function testSiteIsAvailable(): Promise<boolean> {
     return testData.readyForTest;
 }
 
-async function testSiteIsUnavailable(): Promise<boolean> {
+async function testSiteIsUnavailable(fileToRetreive: string = "test.json"): Promise<boolean> {
     let testData = { readyForTest: false };
     const DELAY_INCREMENT = 100;
 
     for (let i = 0; i < 5000; i += DELAY_INCREMENT) {
         try {
-            testData = <any>await (await fetch("http://localhost:3000/test.json")).json();
+            testData = <any>await (await fetch(`http://localhost:3000/${fileToRetreive}`)).json();
             await delay(DELAY_INCREMENT);
         } catch {
             return true;
@@ -93,7 +108,13 @@ async function clearExtensionSettings(): Promise<void> {
     }
 }
 
-async function applyExtensionSettings(explicitSettings: any, scope: vscode.ConfigurationScope): Promise<void> {
+interface ExplicitSettings {
+    defaultUrl?: string;
+    monitoredTasks?: impl.TaskCriteria[];
+    taskBehavior?: impl.MonitoringType;
+}
+
+async function applyExtensionSettings(explicitSettings: ExplicitSettings, scope?: vscode.ConfigurationScope): Promise<void> {
     const configuration = vscode.workspace.getConfiguration(impl.EXTENSION_ID, scope);
 
     await configuration.update(impl.DEFAULT_URL_SETTING_SECTION, explicitSettings.defaultUrl);
@@ -225,7 +246,7 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
     });
 });
 
-suite("TaskMonitor: Multiroot behaviour", function () {
+suite("Multiroot", function () {
     this.timeout(20 * 1000);
     this.beforeAll(() => {
         assert.strictEqual(vscode.workspace.workspaceFolders!.length, 1);
@@ -236,20 +257,68 @@ suite("TaskMonitor: Multiroot behaviour", function () {
 
         vscode.workspace.updateWorkspaceFolders(1, null, { uri: secondProjectUri });
 
-        return folderHasBeenAdded;
+        return folderHasBeenAdded.then(() => clearExtensionSettings());
     });
 
-    test("Do I have two?", () => {
-        assert.strictEqual(vscode.workspace.workspaceFolders!.length, 2);
+    this.beforeEach(() => assert.strictEqual(vscode.workspace.workspaceFolders!.length, 2));
+
+    test("TaskMonitor: Compeletes only for starting matching task", async () => {
+        // Primarily work with the default folder
+        const targetFolder = vscode.workspace.workspaceFolders![0];
+
+        // Configure Monitoring on the first project
+        await applyExtensionSettings({
+            monitoredTasks: [
+                SERVE_TASK_CRITERIA
+            ]
+        }, targetFolder);
+
+        // Start task monitoring
+        const monitor = new impl.TaskMonitor();
+
+        // Obtain the serve task from the *first* project
+        const defaultServeTask = await findTargetTask([SERVE_TASK_CRITERIA], targetFolder);
+        
+        // Wait for the task from the first project
+        let didObserveTaskStarting = false;
+        const taskStartedPromise = monitor.waitForTask().then(() => didObserveTaskStarting = true);
+        assert.ok(!monitor.isTargetTaskRunning(), "task should not be running");
+
+        // Start the task from the *other* project, which shouldn't result
+        // in the task triggering.
+        const alternativeServeTask = await findTargetTask([ALT_SERVE_TASK_CRITERIA], vscode.workspace.workspaceFolders![1]);
+        const alternativeRunningTask = await vscode.tasks.executeTask(alternativeServeTask!);
+
+        assert.ok(await testSiteIsAvailable("test2.json"), "Site did not start");
+        assert.ok(!monitor.isTargetTaskRunning(), "Target task shouldn't be running");
+        assert.ok(!didObserveTaskStarting, "Monitor shouldn't have been triggered");
+
+        alternativeRunningTask.terminate();
+        assert.ok(await testSiteIsUnavailable("test2.json"));
+
+        const runningTask = await vscode.tasks.executeTask(defaultServeTask!);
+        assert.ok(await testSiteIsAvailable());
+        assert.ok(monitor.isTargetTaskRunning());
+
+        runningTask.terminate();
+
+        assert.ok(await testSiteIsUnavailable());
+
+        await taskStartedPromise;
+        assert.ok(didObserveTaskStarting);
+        monitor.dispose();
     });
 
-    this.afterAll(() => {
+    this.afterAll(async () => {
+        await clearExtensionSettings();
+        
         if (vscode.workspace.workspaceFolders!.length === 1) {
             // We're in a good state, no need to clean up
             return;
         }
 
         const foldersAtTarget = waitForWorkspaceFoldersToReachTargetCount(1);
+
         vscode.workspace.updateWorkspaceFolders(1, vscode.workspace.workspaceFolders!.length - 1);
 
         return foldersAtTarget;

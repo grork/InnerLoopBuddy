@@ -55,13 +55,13 @@
                 "showReuseMessage": false,
                 "clear": false
             },
-            "dependsOn": [ "install" ]
+            "dependsOn": [ "install2" ]
         },
         {
             "type": "npm",
-            "label": "Serve",
+            "label": "serve2",
             "detail": "Serve files with automatic browser loading",
-            "script": "serve2",
+            "script": "serve",
             "isBackground": true,
             "presentation": {
                 "echo": false,
@@ -74,7 +74,7 @@
             "runOptions": {
                 "runOn": "folderOpen"
             },
-            "dependsOn": [ "Build" ]
+            "dependsOn": [ "build2" ]
         },
     ]
 }

@@ -12,7 +12,7 @@ const SHOW_SETTINGS_BUTTON = "Configure in settings";
 /**
  * What type of monitoring should happen
  */
-const enum MonitoringType {
+export const enum MonitoringType {
     /**
      * There is no monitoring, and only manual command invocation is available
      */
@@ -74,7 +74,7 @@ export function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): boole
  * @param criteria Criteria to find a matching task
  * @returns The matching criteria, if found.
  */
-export function isTargetTaskRunning(resolver: TaskCriteriaResolver): Maybe<boolean> {
+export function isTargetTaskRunning(resolver: TaskCriteriaResolver): boolean {
     return !!vscode.tasks.taskExecutions.find((executingTask: vscode.TaskExecution) => {
         const criteria = resolver(executingTask.task.scope);
         return isTargetTask(executingTask.task, criteria);
@@ -227,6 +227,10 @@ export class TaskMonitor {
         this.resolvePromise!();
         this.dispose();
     }
+
+    isTargetTaskRunning(): boolean {
+        return isTargetTaskRunning(this.criteriaResolver);
+    }
 }
 
 /**
@@ -257,7 +261,7 @@ export class SimpleBrowserHelperExtension {
 
 export function activate(context: vscode.ExtensionContext) {
     const instance = new SimpleBrowserHelperExtension();
-    
+
     context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => {
         return instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION));
     }));

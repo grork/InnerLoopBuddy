@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "Sample Workspace for Simple Browser Tests",
   "scripts": {
-    "build": "copyfiles index.html output && copyfiles test.json output",
+    "build": "copyfiles index2.html output && copyfiles test2.json output",
     "serve": "browser-sync start --server output --watch --no-ui --listen localhost --no-online --no-open --reload-debounce 250"
   },
   "author": "Dominic Hopton",
