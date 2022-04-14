@@ -259,6 +259,29 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
     });
 });
 
+suite("Command: Explicit Execution", function () {
+    this.beforeEach(async () => {
+        await clearExtensionSettings();
+        assert.strictEqual(vscode.workspace.workspaceFolders!.length, 1);
+    });
+
+    test("Browser Opens via Command", async () => {
+        await applyExtensionSettings({
+            defaultUrl: "http://localhost:3000"
+        }, vscode.workspace.workspaceFolders![0]);
+
+        assert.ok(await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID));
+        await delay(1 * 1000);
+        await vscode.commands.executeCommand("workbench.action.closeAllEditors");        
+    });
+
+    test("Browser doesn't open via Command when no URL set", async () => {
+        assert.ok(!await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID));
+        await delay(1 * 1000);
+        await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+    });
+});
+
 suite("Multiroot", function () {
     this.timeout(20 * 1000);
     this.beforeAll(() => {
@@ -273,7 +296,25 @@ suite("Multiroot", function () {
         return folderHasBeenAdded.then(() => clearExtensionSettings());
     });
 
-    this.beforeEach(() => assert.strictEqual(vscode.workspace.workspaceFolders!.length, 2));
+    this.afterAll(async () => {
+        await clearExtensionSettings();
+        
+        if (vscode.workspace.workspaceFolders!.length === 1) {
+            // We're in a good state, no need to clean up
+            return;
+        }
+
+        const foldersAtTarget = waitForWorkspaceFoldersToReachTargetCount(1);
+
+        vscode.workspace.updateWorkspaceFolders(1, vscode.workspace.workspaceFolders!.length - 1);
+
+        return foldersAtTarget;
+    });
+
+    this.beforeEach(() => {
+        assert.strictEqual(vscode.workspace.workspaceFolders!.length, 2, "Not enough workspaces");
+        return clearExtensionSettings();
+    });
 
     test("TaskMonitor: Compeletes only for starting matching task", async () => {
         // Primarily work with the default folder
@@ -320,41 +361,29 @@ suite("Multiroot", function () {
         monitor.dispose();
     });
 
-    this.afterAll(async () => {
-        await clearExtensionSettings();
-        
-        if (vscode.workspace.workspaceFolders!.length === 1) {
-            // We're in a good state, no need to clean up
-            return;
-        }
+    test("Command: Active Editor Picks Correct configuration", async () => {
+        const defaultWorkspace = vscode.workspace.workspaceFolders![0];
 
-        const foldersAtTarget = waitForWorkspaceFoldersToReachTargetCount(1);
-
-        vscode.workspace.updateWorkspaceFolders(1, vscode.workspace.workspaceFolders!.length - 1);
-
-        return foldersAtTarget;
-    });
-});
-
-suite("Command: Explicit Execution", function () {
-    this.beforeEach(async () => {
-        await clearExtensionSettings();
-        assert.strictEqual(vscode.workspace.workspaceFolders!.length, 1);
-    });
-
-    test("Browser Opens via Command", async () => {
+        // Set a configuration with a URL for one project, but not the other
         await applyExtensionSettings({
-            defaultUrl: "http://localhost:3000"
-        }, vscode.workspace.workspaceFolders![0]);
+            defaultUrl: "http://localhost:3000/"
+        }, defaultWorkspace);
 
-        assert.ok(await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID));
-        await delay(1 * 1000);
-        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
-    });
+        // Open a document from the default projects
+        const indexUri = vscode.Uri.joinPath(defaultWorkspace.uri, "index.html");
+        await vscode.window.showTextDocument(indexUri);
 
-    test("Browser doesn't open via Command when no URL set", async () => {
-        assert.ok(!await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID));
+        // Execute the command
+        assert.ok(await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID), "Command Failed to execute");
         await delay(1 * 1000);
-        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+        await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+
+        // Open the second index (Which should fail the command)
+        const index2Uri = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![1].uri, "index2.html");
+        await vscode.window.showTextDocument(index2Uri);
+
+        assert.ok(!(await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID)), "Command Shouldn't have executed");
+        await delay(1 * 1000);
+        await vscode.commands.executeCommand("workbench.action.closeAllEditors");
     });
 });
