@@ -21,7 +21,7 @@
         },
         {
             "type": "shell",
-            "command": "echo Test",
+            "command": "echo Test2 && exit 98",
             "group": {
                 "kind": "none"
             },

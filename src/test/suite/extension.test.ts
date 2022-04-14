@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import fetch from "node-fetch";
 
 import * as impl from "../../extension";
+import { exit } from "process";
 
 const SERVE_TASK_TYPE = "npm";
 const SERVE_TASK_SCRIPT = "serve";
@@ -13,18 +14,33 @@ const SERVE_TASK_CRITERIA = {
     }
 };
 
-const ALT_SERVE_TASK_CRITERIA = {
+const ECHO_TASK_TYPE = "shell";
+const ECHO_TASK_COMMAND = "echo Test && exit 99";
+const ECHO_TASK_CRITERIA = {
     "definition": {
-        "type": SERVE_TASK_TYPE,
-        "script": SERVE_TASK_SCRIPT
+        "type": ECHO_TASK_TYPE
+    },
+    "execution": {
+        "commandLine": ECHO_TASK_COMMAND
     }
-};
+}
+
+const ALT_ECHO_TASK_CRITERIA = {
+    "definition": {
+        "type": ECHO_TASK_TYPE
+    },
+    "execution": {
+        "commandLine": "echo Test2 && exit 98"
+    }
+}
 
 /**
  * For most tests, we just need to resolve one task, and the scope doesn't matter
  */
-function alwaysResolveServeTask(scope: impl.ActualTaskScope): impl.TaskCriteria[] {
-    return [SERVE_TASK_CRITERIA];
+function getTestTaskResolverForCriteria(taskToReturn: impl.TaskCriteria[]): (scope: impl.ActualTaskScope) => impl.TaskCriteria[] {
+    return () => {
+        return taskToReturn;
+    };
 }
 
 function waitForWorkspaceFoldersToReachTargetCount(target: number): Promise<unknown> {
@@ -37,6 +53,21 @@ function waitForWorkspaceFoldersToReachTargetCount(target: number): Promise<unkn
 
         disposable.dispose();
         completion();
+    });
+
+    return promise;
+}
+
+function waitForTaskProcessToEnd(targetTask: vscode.Task): Promise<number> {
+    let completion: (e: number) => any = () => { -1 };
+    const promise = new Promise<number>((c) => completion = c);
+    const disposable = vscode.tasks.onDidEndTaskProcess((e) => {
+        if (e.execution.task !== targetTask) {
+            return;
+        }
+
+        disposable.dispose();
+        completion(e.exitCode!);
     });
 
     return promise;
@@ -123,8 +154,6 @@ async function applyExtensionSettings(explicitSettings: ExplicitSettings, scope?
 }
 
 suite("Infrastructure: Workspace under-test configuration validation", function () {
-    this.timeout(20 * 1000);
-
     this.beforeEach(async () => await clearExtensionSettings());
 
     test("Sample workspace was opened", () => {
@@ -132,23 +161,23 @@ suite("Infrastructure: Workspace under-test configuration validation", function 
         assert.ok(vscode.workspace.workspaceFile.path.endsWith("/sample.code-workspace"), "Wrong workspace opened");
     });
 
-    test("Opened workspace has appropriate serve task", async () => {
-        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
+    test("Opened workspace has appropriate echo task", async () => {
+        const echoTask = await findTargetTask([ECHO_TASK_CRITERIA]);
 
-        assert.ok(!!serveTask, "Serve task not found");
-        assert.strictEqual(serveTask.definition.type, "npm");
-        assert.strictEqual(serveTask.definition.script, "serve");
+        assert.ok(!!echoTask, "Echo task not found");
+        assert.strictEqual(echoTask.definition.type, ECHO_TASK_TYPE);
+        assert.strictEqual((<vscode.ShellExecution>echoTask.execution).commandLine, ECHO_TASK_COMMAND);
+        assert.strictEqual(echoTask.scope, vscode.workspace.workspaceFolders![0]);
     });
 
-    test("Serve Task starts sample site", async () => {
-        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
+    test("Echo Task executes", async () => {
+        const echoTask = (await findTargetTask([ECHO_TASK_CRITERIA]))!;
+        const processEnded = waitForTaskProcessToEnd(echoTask);
 
-        const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
-        assert.ok(await testSiteIsAvailable());
+        await vscode.tasks.executeTask(echoTask);
+        const exitCode = await processEnded;
 
-        runningTask.terminate();
-
-        assert.ok(await testSiteIsUnavailable());
+        assert.strictEqual(exitCode, 99, "Exit code of process was wrong")
     });
 });
 
@@ -157,37 +186,20 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
 
     this.beforeEach(async () => await clearExtensionSettings());
 
-    test("Already executing task can be discovered", async () => {
-        assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
-            "task should not be running");
-
-        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
-
-        const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
-        assert.ok(await testSiteIsAvailable());
-
-        assert.ok(impl.isTargetTaskRunning(alwaysResolveServeTask));
-        runningTask.terminate();
-
-        assert.ok(await testSiteIsUnavailable());
-    });
-
     test("When a task is not started, promise completes when started", async () => {
-        const monitor = new impl.TaskMonitor(alwaysResolveServeTask);
-        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
+        const monitor = new impl.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
+        const echoTask = (await findTargetTask([ECHO_TASK_CRITERIA]))!;
         let didObserveTaskStarting = false;
+
         const taskStartedPromise = monitor.waitForTask().then(() => didObserveTaskStarting = true);
+        const processTerminated = waitForTaskProcessToEnd(echoTask);
 
-        assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
-            "task should not be running");
+        assert.ok(!monitor.isTargetTaskRunning(), "task should not be running");
 
-        const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
-        assert.ok(await testSiteIsAvailable());
-        assert.ok(impl.isTargetTaskRunning(alwaysResolveServeTask));
+        await vscode.tasks.executeTask(echoTask);
 
-        runningTask.terminate();
-
-        assert.ok(await testSiteIsUnavailable());
+        const exitCode = await processTerminated;
+        assert.strictEqual(exitCode, 99, "Wrong exit code");
 
         await taskStartedPromise;
         assert.ok(didObserveTaskStarting);
@@ -195,53 +207,54 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
     });
 
     test("Promise doesn't complete for non-matching task", async () => {
-        const monitor = new impl.TaskMonitor(alwaysResolveServeTask);
-        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
-        let targetTaskExecutionCount = 0;
-        const taskStartedPromise = monitor.waitForTask().then(() => targetTaskExecutionCount += 1);
+        const monitor = new impl.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
+        const echoTask = (await findTargetTask([ECHO_TASK_CRITERIA]))!;
+        let didObserveTaskStarting = false;
+        const taskStartedPromise = monitor.waitForTask().then(() => didObserveTaskStarting = true);
 
-        assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
-            "task should not be running");
+        assert.ok(!monitor.isTargetTaskRunning(), "task should not be running");
+
+        // Execute the not-the-target-task
+        const npmInstall = await findTargetTask([{ "definition": { "type": "shell" }, "name": "install" }]);
+        assert.ok(!!npmInstall, "NPM Install Shell Task not found");
+
+        const notShellTaskComplete = waitForTaskProcessToEnd(npmInstall);
+        await vscode.tasks.executeTask(npmInstall);
+        await notShellTaskComplete;
+
+        assert.ok(!didObserveTaskStarting, "Task shouldn't have been executed");
+
+        // Now run the echo task
+        const echoTaskCompleted = waitForTaskProcessToEnd(echoTask);
+        await vscode.tasks.executeTask(echoTask);
         
-        const testShellTask = await findTargetTask([{ "definition": { "type": "shell" }, "name": "testshelltask" }]);
-        assert.ok(!!testShellTask, "Test Shell Task not found");
-
-        const executingShellTask = await vscode.tasks.executeTask(testShellTask);
-        executingShellTask.terminate();
-
-        // Now run the serve task
-        const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
-        assert.ok(await testSiteIsAvailable());
-        assert.ok(impl.isTargetTaskRunning(alwaysResolveServeTask));
-
-        runningTask.terminate();
-
-        assert.ok(await testSiteIsUnavailable());
-
+        // Check it exited appropriately
+        const exitCode = await echoTaskCompleted;
+        assert.strictEqual(exitCode, 99);
+        
         await taskStartedPromise;
-        assert.strictEqual(targetTaskExecutionCount, 1);
+        assert.ok(didObserveTaskStarting, "Task should have started");
         monitor.dispose();
     });
 
     test("Promise is completed on construction if task is already started", async () => {
-        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
+        const resolver = getTestTaskResolverForCriteria([SERVE_TASK_CRITERIA]);
+        const serveTask = (await findTargetTask([SERVE_TASK_CRITERIA]))!;
+        assert.ok(!impl.isTargetTaskRunning(resolver), "task should not be running");
 
-        assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
-            "task should not be running");
-
-        const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
+        const runningTask = await vscode.tasks.executeTask(serveTask);
         assert.ok(await testSiteIsAvailable());
-        assert.ok(impl.isTargetTaskRunning(alwaysResolveServeTask));
+        assert.ok(impl.isTargetTaskRunning(resolver), "Task should have started");
 
-        const monitor = new impl.TaskMonitor(alwaysResolveServeTask);
+        const monitor = new impl.TaskMonitor(resolver);
         let didObserveTaskStarting = false;
         await monitor.waitForTask().then(() => didObserveTaskStarting = true);
 
         runningTask.terminate();
 
         assert.ok(await testSiteIsUnavailable());
-
         assert.ok(didObserveTaskStarting);
+
         monitor.dispose();
     });
 });
@@ -269,7 +282,7 @@ suite("Multiroot", function () {
         // Configure Monitoring on the first project
         await applyExtensionSettings({
             monitoredTasks: [
-                SERVE_TASK_CRITERIA
+                ECHO_TASK_CRITERIA
             ]
         }, targetFolder);
 
@@ -277,33 +290,31 @@ suite("Multiroot", function () {
         const monitor = new impl.TaskMonitor();
 
         // Obtain the serve task from the *first* project
-        const defaultServeTask = await findTargetTask([SERVE_TASK_CRITERIA], targetFolder);
+        const defaultEchoTask = (await findTargetTask([ECHO_TASK_CRITERIA], targetFolder))!;
         
-        // Wait for the task from the first project
+        // Listen for the task from the first project
         let didObserveTaskStarting = false;
         const taskStartedPromise = monitor.waitForTask().then(() => didObserveTaskStarting = true);
         assert.ok(!monitor.isTargetTaskRunning(), "task should not be running");
 
         // Start the task from the *other* project, which shouldn't result
         // in the task triggering.
-        const alternativeServeTask = await findTargetTask([ALT_SERVE_TASK_CRITERIA], vscode.workspace.workspaceFolders![1]);
-        const alternativeRunningTask = await vscode.tasks.executeTask(alternativeServeTask!);
+        const alternativeServeTask = (await findTargetTask([ALT_ECHO_TASK_CRITERIA], vscode.workspace.workspaceFolders![1]))!;
+        const alternativeEchoTaskExited = waitForTaskProcessToEnd(alternativeServeTask);
+        await vscode.tasks.executeTask(alternativeServeTask);
 
-        assert.ok(await testSiteIsAvailable("test2.json"), "Site did not start");
-        assert.ok(!monitor.isTargetTaskRunning(), "Target task shouldn't be running");
+        // Check that we've completed the alternative task (Which shouldn't
+        // trigger anything)
+        const alternateExitCode = await alternativeEchoTaskExited;
+        assert.strictEqual(alternateExitCode, 98, "Alternate Task had wrong exit code");
         assert.ok(!didObserveTaskStarting, "Monitor shouldn't have been triggered");
 
-        alternativeRunningTask.terminate();
-        assert.ok(await testSiteIsUnavailable("test2.json"));
-
-        const runningTask = await vscode.tasks.executeTask(defaultServeTask!);
-        assert.ok(await testSiteIsAvailable());
-        assert.ok(monitor.isTargetTaskRunning());
-
-        runningTask.terminate();
-
-        assert.ok(await testSiteIsUnavailable());
-
+        // Now do the intended task.
+        const echoTaskExited = waitForTaskProcessToEnd(defaultEchoTask);
+        await vscode.tasks.executeTask(defaultEchoTask);
+        const echoTaskExitCode = await echoTaskExited;
+        assert.strictEqual(echoTaskExitCode, 99, "Echo exit code was wrong")
+        
         await taskStartedPromise;
         assert.ok(didObserveTaskStarting);
         monitor.dispose();
