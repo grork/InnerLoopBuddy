@@ -1,5 +1,4 @@
-# simplebrowser-helper-extension README
-
+# Inner Loop Buddy README
 ## Features
 
 ## Requirements
@@ -8,7 +7,7 @@
 
 This extension contributes the following settings:
 
-* `codevoid.simplebrowser-helper.defaultUrl`: URL to open when the command is invoked
+* `codevoid.inner-loop-buddy.defaultUrl`: URL to open when the command is invoked
 
 ## Known Issues
 

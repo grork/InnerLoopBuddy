@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as _ from "lodash";
 
-export const EXTENSION_ID = "codevoid.simplebrowser-helper-extension";
+export const EXTENSION_ID = "codevoid.inner-loop-buddy";
 export const DEFAULT_URL_SETTING_SECTION = "defaultUrl"
 export const MONITORED_TASKS_SETTING_SECTION = "monitoredTasks";
 export const TASK_BEHAVIOUR_SETTING_SECTION = "taskBehavior";
@@ -236,7 +236,7 @@ export class TaskMonitor {
 /**
  * Extension instance that manages the lifecycle of an extension in vscode.
  */
-export class SimpleBrowserHelperExtension {
+export class InnerLoopBuddyExtension {
     openSimpleBrowser(scope: Maybe<vscode.ConfigurationScope>): Thenable<boolean> {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID, scope);
         const defaultBrowserUrl = <string>config.get("defaultUrl");
@@ -260,7 +260,7 @@ export class SimpleBrowserHelperExtension {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    const instance = new SimpleBrowserHelperExtension();
+    const instance = new InnerLoopBuddyExtension();
 
     context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => {
         return instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION));

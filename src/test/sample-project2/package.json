@@ -1,7 +1,7 @@
 {
-  "name": "codevoid.simplebrowser.test",
+  "name": "codevoid.inner-loop-buddy.test",
   "version": "0.0.1",
-  "description": "Sample Workspace for Simple Browser Tests",
+  "description": "Sample Workspace for Inner Loop Buddy Tests",
   "scripts": {
     "build": "copyfiles index2.html output && copyfiles test2.json output",
     "serve": "browser-sync start --server output --watch --no-ui --listen localhost --no-online --no-open --reload-debounce 250"

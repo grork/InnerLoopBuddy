@@ -1,16 +1,16 @@
 {
-    "name": "simplebrowser-helper-extension",
+    "name": "inner-loop-buddy",
     "publisher": "codevoid",
-    "displayName": "SimpleBrowser Helper",
+    "displayName": "Inner Loop Buddy",
     "description": "Open a simple browser to a preconfigured URL on demand, or startup",
     "repository": {
         "type": "git",
-        "url": "https://github.com/grork/SimpleBrowseHelper"
+        "url": "https://github.com/grork/InnerLoopBuddy"
     },
     "bugs": {
-        "url": "https://github.com/grork/SimpleBrowserHelper/issues/"
+        "url": "https://github.com/grork/InnerLoopBuddy/issues/"
     },
-    "homepage": "https://github.com/grork/SimpleBrowserHelper/README.md",
+    "homepage": "https://github.com/grork/InnerLoopBuddy/README.md",
     "version": "0.0.1",
     "extensionKind": [
         "ui"
@@ -31,38 +31,38 @@
         "preview"
     ],
     "activationEvents": [
-        "onCommand:simplebrowser-helper-extension.openDefaultUrl",
+        "onCommand:inner-loop-buddy.openDefaultUrl",
         "onStartupFinished"
     ],
     "main": "./out/extension.js",
     "contributes": {
         "commands": [
             {
-                "command": "codevoid.simplebrowser-helper-extension.openDefaultUrl",
+                "command": "codevoid.inner-loop-buddy.openDefaultUrl",
                 "title": "Open Default URL",
-                "category": "Simple Browser Helper"
+                "category": "Inner Loop Buddy"
                 
             }
         ],
         "menus": {
             "commandPalette": [
                 {
-                    "command": "codevoid.simplebrowser-helper-extension.openDefaultUrl",
+                    "command": "codevoid.inner-loop-buddy.openDefaultUrl",
                     "when": "workbenchState != 'empty'"
                 }
             ]
         },
         "configuration": [
             {
-                "title": "Simple Browser Helper",
+                "title": "Inner Loop Buddy",
                 "properties": {
-                    "codevoid.simplebrowser-helper-extension.defaultUrl": {
+                    "codevoid.inner-loop-buddy.defaultUrl": {
                         "title": "URL to open the browser too",
                         "type": "string",
                         "default": null,
                         "scope": "resource"
                     },
-                    "codevoid.simplebrowser-helper-extension.monitoredTasks": {
+                    "codevoid.inner-loop-buddy.monitoredTasks": {
                         "title": "Task information to match for starting the browser",
                         "type": "array",
                         "scope": "resource",
@@ -70,7 +70,7 @@
                             "type": "object"
                         }
                     },
-                    "codevoid.simplebrowser-helper-extension.taskBehavior": {
+                    "codevoid.inner-loop-buddy.taskBehavior": {
                         "title": "How to monitor tasks for execution",
                         "type": "string",
                         "default": "onetime",
