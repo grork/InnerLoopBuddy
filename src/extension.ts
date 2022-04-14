@@ -64,18 +64,8 @@ type Maybe<T> = T | undefined;
  * @param criteria Criteria to search for in the task 
  * @returns True if the task matches the criteria
  */
-function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): boolean {
+export function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): boolean {
     return criteria.some((c) => _.isMatch(task, c));
-}
-
-/**
- * Searches all tasks defined in this session for a match
- * @param criteria Criteria to find a matching task
- * @returns Promise containing the task if there is a match; undefined otherwise.
- */
-export async function findTargetTask(criteria: TaskCriteria[]): Promise<Maybe<vscode.Task>> {
-    const foundTasks = await vscode.tasks.fetchTasks();
-    return foundTasks.find((task) => isTargetTask(task, criteria));
 }
 
 /**
@@ -112,10 +102,14 @@ async function getConfigurationScopeFromActiveEditor(probeSetting: string): Prom
         return Promise.resolve(undefined);
     }
 
-    // If there is only one workspace, let the configuration system resolve
-    // naturally by supplying null as the context.
+    // If there is only one workspace, provide that one workspace. In the case
+    // of a *folder* being open, but *not* part of a workspace, 'undefined'
+    // would work. However, a workspace (`.code-workspace`) with a single folder
+    // when passed 'undefined' for configuration resolution will resolve *only*
+    // the settings from the `.code-workspace` file. So, we always supply a
+    // a folder to capture that scenario.
     if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length === 1) {
-        return Promise.resolve(undefined);
+        return Promise.resolve(vscode.workspace.workspaceFolders[0]);
     }
 
     // 1. No Editor (so no active context)
@@ -152,6 +146,35 @@ async function getConfigurationScopeFromActiveEditor(probeSetting: string): Prom
 }
 
 /**
+ * Get the configured TaskCriteria from the configuration, for the supplied
+ * scope and any scopes (e.g. workspace) that might encompass a specific
+ * WorkspaceFolder.
+ *
+ * We *always* want the monitored tasks from the global level. This is because
+ * if there are tasks defined on a folder level (along with the URL to open),
+ * the critier might be a shared configuration defined globally. Merging them
+ * lets us 'catch them all' -- and duplicates are fine since we'll stop at the
+ * first match.
+ * 
+ * @param scope The scope for which to resolve the configuration at
+ */
+function getCriteriaFromConfigurationForTaskScope(scope: ActualTaskScope): TaskCriteria[] {
+    // Get the global/workspace configuration. 
+    const criteria: TaskCriteria[] = vscode.workspace.getConfiguration(EXTENSION_ID).get(MONITORED_TASKS_SETTING_SECTION, []);
+
+    // If it's been obtained from a specific workspace folder, lets use that.
+    // Ultimately configuration will resolve
+    if ((scope !== vscode.TaskScope.Global)
+        && (scope !== vscode.TaskScope.Workspace)) {
+        const folderConfiguration = vscode.workspace.getConfiguration(EXTENSION_ID, <vscode.WorkspaceFolder>scope);
+        const folderCriteria: TaskCriteria[] = folderConfiguration.get(MONITORED_TASKS_SETTING_SECTION)!;
+        criteria.push(...folderCriteria);
+    }
+
+    return criteria;
+}
+
+/**
  * Monitors the current session to task starts, and if they match the supplied
  * criteria completes the promise available in waitForTask.
  */
@@ -166,7 +189,7 @@ export class TaskMonitor {
      * @param criteriaResolver Called to resolve the configuration for the
      *        executing task
      */
-    constructor(private criteriaResolver: TaskCriteriaResolver) {
+    constructor(private criteriaResolver: TaskCriteriaResolver = getCriteriaFromConfigurationForTaskScope) {
         vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this.subscriptions);
         this.completionPromise = new Promise((resolve, _) => {
             this.resolvePromise = resolve;
@@ -234,7 +257,7 @@ export class SimpleBrowserHelperExtension {
 
 export function activate(context: vscode.ExtensionContext) {
     const instance = new SimpleBrowserHelperExtension();
-
+    
     context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => {
         return instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION));
     }));

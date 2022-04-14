@@ -8,7 +8,7 @@
                 "kind": "none"
             },
             "problemMatcher": [ ],
-            "label": "install",
+            "label": "install2",
             "detail": "installs NPM",
             "presentation": {
                 "echo": true,
@@ -26,7 +26,7 @@
                 "kind": "none"
             },
             "problemMatcher": [ ],
-            "label": "testshelltask",
+            "label": "testshelltask2",
             "detail": "Task that just runs echo to test execution",
             "presentation": {
                 "echo": true,
@@ -45,7 +45,7 @@
                 "isDefault": true
             },
             "problemMatcher": [ ],
-            "label": "build",
+            "label": "build2",
             "detail": "Copies output files to the output folder",
             "presentation": {
                 "echo": true,
@@ -59,9 +59,9 @@
         },
         {
             "type": "npm",
-            "label": "serve",
+            "label": "Serve",
             "detail": "Serve files with automatic browser loading",
-            "script": "serve",
+            "script": "serve2",
             "isBackground": true,
             "presentation": {
                 "echo": false,
@@ -74,7 +74,7 @@
             "runOptions": {
                 "runOn": "folderOpen"
             },
-            "dependsOn": [ "build" ]
+            "dependsOn": [ "Build" ]
         },
     ]
 }

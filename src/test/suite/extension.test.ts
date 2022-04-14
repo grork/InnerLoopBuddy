@@ -20,6 +20,31 @@ function alwaysResolveServeTask(scope: impl.ActualTaskScope): impl.TaskCriteria[
     return [SERVE_TASK_CRITERIA];
 }
 
+function waitForWorkspaceFoldersToReachTargetCount(target: number): Promise<unknown> {
+    let completion: (e?: any) => any = () => { };
+    const promise = new Promise((c) => completion = c);
+    const disposable = vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        if (vscode.workspace.workspaceFolders!.length !== target) {
+            return;
+        }
+
+        disposable.dispose();
+        completion();
+    });
+
+    return promise;
+}
+
+/**
+ * Searches all tasks defined in this session for a match
+ * @param criteria Criteria to find a matching task
+ * @returns Promise containing the task if there is a match; undefined otherwise.
+ */
+export async function findTargetTask(criteria: impl.TaskCriteria[]): Promise<vscode.Task | undefined> {
+    const foundTasks = await vscode.tasks.fetchTasks();
+    return foundTasks.find((task) => impl.isTargetTask(task, criteria));
+}
+
 /**
  * Helper to allow 'sleeping' in a test
  * */
@@ -57,34 +82,37 @@ async function testSiteIsUnavailable(): Promise<boolean> {
 }
 
 async function clearExtensionSettings(): Promise<void> {
-    const workspaceFolder = (vscode.workspace.workspaceFolders)![0]; // assume one workspace folder in our sample project
-    const configuration = vscode.workspace.getConfiguration(impl.EXTENSION_ID, workspaceFolder);
+    const configurations: vscode.WorkspaceConfiguration[] = vscode.workspace.workspaceFolders!.map((folder) => vscode.workspace.getConfiguration(impl.EXTENSION_ID, folder));
 
-    await configuration.update(impl.DEFAULT_URL_SETTING_SECTION, undefined);
-    await configuration.update(impl.MONITORED_TASKS_SETTING_SECTION, undefined);
-    await configuration.update(impl.TASK_BEHAVIOUR_SETTING_SECTION, undefined);
+    for (const config of configurations!) {
+        for (const target of [vscode.ConfigurationTarget.Workspace, vscode.ConfigurationTarget.WorkspaceFolder]) {
+            await config.update(impl.DEFAULT_URL_SETTING_SECTION, undefined, target);
+            await config.update(impl.MONITORED_TASKS_SETTING_SECTION, undefined, target);
+            await config.update(impl.TASK_BEHAVIOUR_SETTING_SECTION, undefined, target);
+        }
+    }
 }
 
-async function applyExtensionSettings(explicitSettings: any): Promise<void> {
-    const workspaceFolder = (vscode.workspace.workspaceFolders)![0]; // assume one workspace folder in our sample project
-    const configuration = vscode.workspace.getConfiguration(impl.EXTENSION_ID, workspaceFolder);
+async function applyExtensionSettings(explicitSettings: any, scope: vscode.ConfigurationScope): Promise<void> {
+    const configuration = vscode.workspace.getConfiguration(impl.EXTENSION_ID, scope);
 
     await configuration.update(impl.DEFAULT_URL_SETTING_SECTION, explicitSettings.defaultUrl);
     await configuration.update(impl.MONITORED_TASKS_SETTING_SECTION, explicitSettings.monitoredTasks);
     await configuration.update(impl.TASK_BEHAVIOUR_SETTING_SECTION, explicitSettings.taskBehavior);
 }
 
-suite("Workspace under-test configuration validation", function () {
+suite("Infrastructure: Workspace under-test configuration validation", function () {
     this.timeout(20 * 1000);
 
     this.beforeEach(async () => await clearExtensionSettings());
 
     test("Sample workspace was opened", () => {
-        assert.strictEqual(vscode.workspace.name, "sample-project");
+        assert.ok(vscode.workspace.workspaceFile, "Should have opened an actual workspace file");
+        assert.ok(vscode.workspace.workspaceFile.path.endsWith("/sample.code-workspace"), "Wrong workspace opened");
     });
 
     test("Opened workspace has appropriate serve task", async () => {
-        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
+        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
 
         assert.ok(!!serveTask, "Serve task not found");
         assert.strictEqual(serveTask.definition.type, "npm");
@@ -92,7 +120,7 @@ suite("Workspace under-test configuration validation", function () {
     });
 
     test("Serve Task starts sample site", async () => {
-        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
+        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
@@ -103,7 +131,7 @@ suite("Workspace under-test configuration validation", function () {
     });
 });
 
-suite("Task Discovery & Monitoring", function () {
+suite("TaskMonitor: Task Discovery & Monitoring", function () {
     this.timeout(20 * 1000);
 
     this.beforeEach(async () => await clearExtensionSettings());
@@ -112,7 +140,7 @@ suite("Task Discovery & Monitoring", function () {
         assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
             "task should not be running");
 
-        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
+        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
 
         const runningTask = await vscode.tasks.executeTask(<vscode.Task>serveTask);
         assert.ok(await testSiteIsAvailable());
@@ -125,7 +153,7 @@ suite("Task Discovery & Monitoring", function () {
 
     test("When a task is not started, promise completes when started", async () => {
         const monitor = new impl.TaskMonitor(alwaysResolveServeTask);
-        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
+        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
         let didObserveTaskStarting = false;
         const taskStartedPromise = monitor.waitForTask().then(() => didObserveTaskStarting = true);
 
@@ -147,14 +175,14 @@ suite("Task Discovery & Monitoring", function () {
 
     test("Promise doesn't complete for non-matching task", async () => {
         const monitor = new impl.TaskMonitor(alwaysResolveServeTask);
-        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
+        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
         let targetTaskExecutionCount = 0;
         const taskStartedPromise = monitor.waitForTask().then(() => targetTaskExecutionCount += 1);
 
         assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
             "task should not be running");
         
-        const testShellTask = await impl.findTargetTask([{ "definition": { "type": "shell" }, "name": "testshelltask" }]);
+        const testShellTask = await findTargetTask([{ "definition": { "type": "shell" }, "name": "testshelltask" }]);
         assert.ok(!!testShellTask, "Test Shell Task not found");
 
         const executingShellTask = await vscode.tasks.executeTask(testShellTask);
@@ -175,7 +203,7 @@ suite("Task Discovery & Monitoring", function () {
     });
 
     test("Promise is completed on construction if task is already started", async () => {
-        const serveTask = await impl.findTargetTask([SERVE_TASK_CRITERIA]);
+        const serveTask = await findTargetTask([SERVE_TASK_CRITERIA]);
 
         assert.ok(!impl.isTargetTaskRunning(alwaysResolveServeTask),
             "task should not be running");
@@ -197,16 +225,47 @@ suite("Task Discovery & Monitoring", function () {
     });
 });
 
-suite("Command Handling", function () {
+suite("TaskMonitor: Multiroot behaviour", function () {
     this.timeout(20 * 1000);
-    
-    this.beforeEach(async () => await clearExtensionSettings());
-    this.afterEach(async () => await clearExtensionSettings());
+    this.beforeAll(() => {
+        assert.strictEqual(vscode.workspace.workspaceFolders!.length, 1);
+        const folderHasBeenAdded = waitForWorkspaceFoldersToReachTargetCount(2);
+
+        const baseUri = vscode.workspace.workspaceFolders![0].uri;
+        const secondProjectUri = vscode.Uri.joinPath(baseUri, "../sample-project2");
+
+        vscode.workspace.updateWorkspaceFolders(1, null, { uri: secondProjectUri });
+
+        return folderHasBeenAdded;
+    });
+
+    test("Do I have two?", () => {
+        assert.strictEqual(vscode.workspace.workspaceFolders!.length, 2);
+    });
+
+    this.afterAll(() => {
+        if (vscode.workspace.workspaceFolders!.length === 1) {
+            // We're in a good state, no need to clean up
+            return;
+        }
+
+        const foldersAtTarget = waitForWorkspaceFoldersToReachTargetCount(1);
+        vscode.workspace.updateWorkspaceFolders(1, vscode.workspace.workspaceFolders!.length - 1);
+
+        return foldersAtTarget;
+    });
+});
+
+suite("Command: Explicit Execution", function () {
+    this.beforeEach(async () => {
+        await clearExtensionSettings();
+        assert.strictEqual(vscode.workspace.workspaceFolders!.length, 1);
+    });
 
     test("Browser Opens via Command", async () => {
         await applyExtensionSettings({
             defaultUrl: "http://localhost:3000"
-        });
+        }, vscode.workspace.workspaceFolders![0]);
 
         assert.ok(await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID));
         await delay(1 * 1000);
