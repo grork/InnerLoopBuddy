@@ -71,7 +71,7 @@ export function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): boole
 /**
  * Searches all currently executing tasks for one that matches the supplied
  * criteria.
- * @param criteria Criteria to find a matching task
+ * @param resolver Callback to get criteria to find a matching task
  * @returns The matching criteria, if found.
  */
 export function isTargetTaskRunning(resolver: TaskCriteriaResolver): boolean {
@@ -201,6 +201,9 @@ export class TaskMonitor {
         }
     }
 
+    /**
+     * Cleans up any suscriptions this instance has created
+     */
     dispose() {
         this.subscriptions.forEach((d) => d.dispose());
         this.subscriptions = [];
@@ -228,6 +231,11 @@ export class TaskMonitor {
         this.dispose();
     }
 
+    /**
+     * Using the criteria resolver, looks to see if any matching tasks are
+     * executing
+     * @returns True if the task is currently executing
+     */
     isTargetTaskRunning(): boolean {
         return isTargetTaskRunning(this.criteriaResolver);
     }
@@ -237,6 +245,11 @@ export class TaskMonitor {
  * Extension instance that manages the lifecycle of an extension in vscode.
  */
 export class InnerLoopBuddyExtension {
+    /**
+     * Opens the Simple Browser at the URL stored in configuration
+     * @param scope Configuration scope to source the URL to open from
+     * @returns True if successfully opened
+     */
     openSimpleBrowser(scope: Maybe<vscode.ConfigurationScope>): Thenable<boolean> {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID, scope);
         const defaultBrowserUrl = <string>config.get("defaultUrl");
