@@ -176,12 +176,13 @@ function getCriteriaFromConfigurationForTaskScope(scope: ActualTaskScope): TaskC
 
 /**
  * Monitors the current session to task starts, and if they match the supplied
- * criteria completes the promise available in waitForTask.
+ * criteria, and raises the `onDidMatchingTaskExecute` event if one starts
+ * after instantiation
  */
 export class TaskMonitor {
     private subscriptions: { dispose(): any }[] = [];
-    private completionPromise: Promise<void>;
-    private resolvePromise?: () => void;
+    private matchingTaskExecutedEmitter = new vscode.EventEmitter<number>();
+    private executionsMatched: number = 0;
     
     /**
      * Constructs a new instance and *starts monitoring* for task executions
@@ -191,13 +192,9 @@ export class TaskMonitor {
      */
     constructor(private criteriaResolver: TaskCriteriaResolver = getCriteriaFromConfigurationForTaskScope) {
         vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this.subscriptions);
-        this.completionPromise = new Promise((resolve, _) => {
-            this.resolvePromise = resolve;
-        });
-
-        if (isTargetTaskRunning(criteriaResolver)) {
-            this.resolvePromise!();
-            this.dispose();
+        if (this.isTargetTaskRunning()) {
+            // If it was already running, we must have executed it once
+            this.executionsMatched = 1;
         }
     }
 
@@ -205,19 +202,8 @@ export class TaskMonitor {
      * Cleans up any suscriptions this instance has created
      */
     dispose() {
-        this.subscriptions.forEach((d) => d.dispose());
+        vscode.Disposable.from(...this.subscriptions).dispose();
         this.subscriptions = [];
-        this.resolvePromise = () => { };
-    }
-
-    /**
-     * Obtain a promise that will complete (or already be completed) when a task
-     * that matches the criteria supplied has started, or has already been
-     * started.
-     * @returns Promise that completes when the task starts
-     */
-    waitForTask(): Promise<void> {
-        return this.completionPromise;
     }
 
     private handleTaskStarting(e: vscode.TaskStartEvent): void {
@@ -227,8 +213,8 @@ export class TaskMonitor {
             return;
         }
 
-        this.resolvePromise!();
-        this.dispose();
+        this.executionsMatched += 1;
+        this.matchingTaskExecutedEmitter.fire(this.executionsMatched);
     }
 
     /**
@@ -238,6 +224,10 @@ export class TaskMonitor {
      */
     isTargetTaskRunning(): boolean {
         return isTargetTaskRunning(this.criteriaResolver);
+    }
+
+    get onDidMatchingTaskExecute(): vscode.Event<number> {
+        return this.matchingTaskExecutedEmitter.event;
     }
 }
 
