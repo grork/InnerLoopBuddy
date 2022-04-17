@@ -69,12 +69,8 @@ type Maybe<T> = T | undefined;
  * @param criteria Criteria to search for in the task 
  * @returns True if the task matches the criteria
  */
-export function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): ActualTaskScope {
-    if (criteria.some((c) => _.isMatch(task, c))) {
-        return task.scope;
-    }
-
-    return undefined;
+export function taskMatchesCriteria(task: vscode.Task, criteria: TaskCriteria[]): boolean {
+    return criteria.some((c) => _.isMatch(task, c));
 }
 
 /**
@@ -83,13 +79,13 @@ export function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): Actua
  * @param resolver Callback to get criteria to find a matching task
  * @returns The matching criteria, if found.
  */
-export function isTargetTaskRunning(resolver: TaskCriteriaResolver): ActualTaskScope {
+export function isMatchingTaskRunning(resolver: TaskCriteriaResolver): Maybe<vscode.Task> {
     const executingTask = vscode.tasks.taskExecutions.find((executingTask: vscode.TaskExecution) => {
         const criteria = resolver(executingTask.task.scope);
-        return !!isTargetTask(executingTask.task, criteria);
+        return !!taskMatchesCriteria(executingTask.task, criteria);
     });
 
-    return executingTask?.task?.scope;
+    return executingTask?.task;
 }
 
 /**
@@ -212,10 +208,10 @@ export class TaskMonitor {
      */
     constructor(private criteriaResolver: TaskCriteriaResolver = getCriteriaFromConfigurationForTaskScope) {
         vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this.subscriptions);
-        const runningTaskScope = this.isTargetTaskRunning();
-        if (runningTaskScope) {
+        const runningTask = this.isMatchingTaskRunning();
+        if (runningTask) {
             // If it was already running, we must have executed it once
-            this.scopedOccurances.set(keyFromScope(runningTaskScope), 1);
+            this.scopedOccurances.set(keyFromScope(runningTask.scope), 1);
         }
     }
 
@@ -229,7 +225,7 @@ export class TaskMonitor {
 
     private handleTaskStarting(e: vscode.TaskStartEvent): void {
         const criteria = this.criteriaResolver(e.execution.task.scope);
-        if (!isTargetTask(e.execution.task, criteria)) {
+        if (!taskMatchesCriteria(e.execution.task, criteria)) {
             // Not our task, nothing to do
             return;
         }
@@ -252,8 +248,8 @@ export class TaskMonitor {
      * executing
      * @returns True if the task is currently executing
      */
-    isTargetTaskRunning(): ActualTaskScope {
-        return isTargetTaskRunning(this.criteriaResolver);
+    isMatchingTaskRunning(): Maybe<vscode.Task> {
+        return isMatchingTaskRunning(this.criteriaResolver);
     }
 
     get onDidMatchingTaskExecute(): vscode.Event<MatchedExecutionOccured> {
