@@ -43,8 +43,20 @@ export type TaskCriteria = { [name: string]: any };
  */
 export type ActualTaskScope = vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder | undefined;
 
+/**
+ * When a matched execution is seen, the event raises this payload for the scope
+ * and matches that have been seen so far.
+ */
 export interface MatchedExecutionOccured {
+    /**
+     * The number of occurances that a match has been seen executed *in this
+     * scope*.
+     */
     occurances: number;
+
+    /**
+     * The scope for which the occurance count is valid
+     */
     scope: ActualTaskScope;
 }
 
@@ -181,6 +193,14 @@ function getCriteriaFromConfigurationForTaskScope(scope: ActualTaskScope): TaskC
     return criteria;
 }
 
+/**
+ * Given a Task Scope, turns it into a string-key to be used in a map etc.
+ * This is needed because *folders* have a URI, which is a great key, the other
+ * two scopes -- Global, Workspace -- are number, which isn't so nice, and also
+ * splits the space in many cases (E.g. single workspace).
+ * @param scope Scope to convert
+ * @returns String representation of that Scope
+ */
 function keyFromScope(scope: ActualTaskScope): string {
     if ((scope === vscode.TaskScope.Global)
         || (scope === vscode.TaskScope.Workspace)) {
@@ -252,6 +272,12 @@ export class TaskMonitor {
         return isMatchingTaskRunning(this.criteriaResolver);
     }
 
+    /**
+     * When a task that matches the configured criteria executes this event will
+     * be raised. It will only be raised for tasks that start *after* the
+     * instance has been constructed. If you want to ask "is it running right
+     * now", you should use `isMatchingTaskRunning`
+     */
     get onDidMatchingTaskExecute(): vscode.Event<MatchedExecutionOccured> {
         return this.matchingTaskExecutedEmitter.event;
     }

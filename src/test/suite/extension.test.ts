@@ -33,6 +33,11 @@ const ALT_ECHO_TASK_CRITERIA = {
     }
 }
 
+/**
+ * Helper for disposables. VS code defines a specific *class*, but the contracts
+ * are dependent on a simpler interface. Rather than having to type it
+ * everywhere, lets have a type.
+ */
 interface Throwaway {
     dispose(): any;
 }
@@ -46,6 +51,12 @@ function getTestTaskResolverForCriteria(taskToReturn: impl.TaskCriteria[]): (sco
     };
 }
 
+/**
+ * Adding a workspace folder is async, so we'd like to know when we've completed
+ * adding a folder. However, the `updateWorkspaceFolders` method does not
+ * provide a promise for completion. We need to listen for an event saying the
+ * folders have changed. This wraps that in a promise.
+ */
 function waitForWorkspaceFoldersToReachTargetCount(target: number): Promise<unknown> {
     const p = getPromiseAndCompletion<void>();
     const disposable = vscode.workspace.onDidChangeWorkspaceFolders(() => {
@@ -60,6 +71,14 @@ function waitForWorkspaceFoldersToReachTargetCount(target: number): Promise<unkn
     return p.promise;
 }
 
+/**
+ * Our simple tasks do terminate, but the `task.terminate` method doesn't
+ * have a promise for completion. So we need to listen to an event signifying
+ * that a tasks *process* has completed. This wraps that event in a promise.
+ * 
+ * NB: The process end event is unreliable. For simple tasks it's OK, but for
+ * something like the HTTP server in these tests, it's unreliable.
+ */
 function waitForTaskProcessToEnd(targetTask: vscode.Task): Promise<number> {
     const p = getPromiseAndCompletion<number>();
     const disposable = vscode.tasks.onDidEndTaskProcess((e) => {
@@ -74,6 +93,13 @@ function waitForTaskProcessToEnd(targetTask: vscode.Task): Promise<number> {
     return p.promise;
 }
 
+/**
+ * Helper that gets a promise instance + it's completion callback in one call.
+ * Mostly I don't like the declare, instantiate, extract dance in multiple
+ * places
+ * @returns an object with `completion` to complete (resolve) the promise, and
+ *          `promise` for the promise that will be compelted.
+ */
 function getPromiseAndCompletion<T>(): { completion: (v: T) => any; promise: Promise<T> } {
     let completion: (v: T) => any = (v) => { };
     const promise = new Promise<T>((r) => completion = r);
@@ -176,9 +202,9 @@ suite("Infrastructure: Workspace under-test configuration validation", function 
         const echoTask = await findTargetTask([ECHO_TASK_CRITERIA]);
 
         assert.ok(!!echoTask, "Echo task not found");
-        assert.strictEqual(echoTask.definition.type, ECHO_TASK_TYPE);
-        assert.strictEqual((<vscode.ShellExecution>echoTask.execution).commandLine, ECHO_TASK_COMMAND);
-        assert.strictEqual(echoTask.scope, vscode.workspace.workspaceFolders![0]);
+        assert.strictEqual(echoTask.definition.type, ECHO_TASK_TYPE, "Wrong type on found task");
+        assert.strictEqual((<vscode.ShellExecution>echoTask.execution).commandLine, ECHO_TASK_COMMAND, "Wrong command on found task");
+        assert.strictEqual(echoTask.scope, vscode.workspace.workspaceFolders![0], "Wrong scope on found task");
     });
 
     test("Echo Task executes", async () => {
@@ -201,19 +227,26 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         const disposables: Throwaway[] = [];
         const echoTask = (await findTargetTask([ECHO_TASK_CRITERIA]))!;
 
+        // Begin monitoring the task
         const taskOberserved = getPromiseAndCompletion<impl.MatchedExecutionOccured>();
         const monitor = new impl.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
         disposables.push(monitor);
         disposables.push(monitor.onDidMatchingTaskExecute((e) => taskOberserved.completion(e)));
 
+        // We don't want it running yet
         assert.ok(!monitor.isMatchingTaskRunning(), "task should not be running");
 
+        // Prepare to wait for the task completion
         const processTerminated = waitForTaskProcessToEnd(echoTask);
+
+        // Actually execute the task
         await vscode.tasks.executeTask(echoTask);
 
+        // Now wait for it's completion
         const exitCode = await processTerminated;
         assert.strictEqual(exitCode, 99, "Wrong exit code");
 
+        // Make sure it observed the right number of times, and in the right scope
         const observedTaskExecutions = await taskOberserved.promise;
         assert.strictEqual<number>(observedTaskExecutions.occurances, 1, "Wrong number of task exections observed");
         assert.strictEqual<vscode.WorkspaceFolder>(observedTaskExecutions.scope, vscode.workspace.workspaceFolders![0], "Wrong scope");
@@ -225,20 +258,25 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         const disposables: Throwaway[] = [];
 
         let didObserveTaskStarting = -1;
+
+        // Monitor tasks being executed
         const monitor = new impl.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
         disposables.push(monitor);
         disposables.push(monitor.onDidMatchingTaskExecute((e) => didObserveTaskStarting = e.occurances));
 
+        // We dont want it runnign
         assert.ok(!monitor.isMatchingTaskRunning(), "task should not be running");
 
         // Execute the not-the-target-task
         const npmInstall = await findTargetTask([{ "definition": { "type": "shell" }, "name": "install" }]);
         assert.ok(!!npmInstall, "NPM Install Shell Task not found");
 
+        // Wiat for it to wrap up
         const notShellTaskComplete = waitForTaskProcessToEnd(npmInstall);
         await vscode.tasks.executeTask(npmInstall);
         await notShellTaskComplete;
 
+        // Really shouldn't have seen any tasks start
         assert.strictEqual(didObserveTaskStarting, -1, "Task shouldn't have been executed");
 
         vscode.Disposable.from(...disposables).dispose();
@@ -252,7 +290,7 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
 
         // Start the task & make sure it's running
         let runningTask = await vscode.tasks.executeTask(serveTask);
-        assert.ok(await testSiteIsAvailable());
+        assert.ok(await testSiteIsAvailable(), "test site didn't start");
 
         // Instantiate the monitor, and ensure it sees the task running
         const monitor = new impl.TaskMonitor(resolver);
@@ -260,7 +298,7 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         assert.strictEqual(monitor.isMatchingTaskRunning()?.scope, vscode.workspace.workspaceFolders![0], "Task should have started in the right scope");
 
         runningTask.terminate();
-        assert.ok(await testSiteIsUnavailable());
+        assert.ok(await testSiteIsUnavailable(), "test site still up");
 
         // Listen for the task starting event
         const taskOberserved = getPromiseAndCompletion<number>();
@@ -268,9 +306,9 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
 
         // Start the stask
         runningTask = await vscode.tasks.executeTask(serveTask);
-        assert.ok(await testSiteIsAvailable());
+        assert.ok(await testSiteIsAvailable(), "test site didn't start");
         runningTask.terminate();
-        assert.ok(await testSiteIsUnavailable());
+        assert.ok(await testSiteIsUnavailable(), "test site was still up");
 
         assert.strictEqual(await taskOberserved.promise, 2, "Not enough task executions");
 
@@ -289,13 +327,13 @@ suite("Command: Explicit Execution", function () {
             defaultUrl: "http://localhost:3000"
         }, vscode.workspace.workspaceFolders![0]);
 
-        assert.ok(await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID));
+        assert.ok(await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID), "Command indicated failure");
         await delay(1 * 1000);
         await vscode.commands.executeCommand("workbench.action.closeAllEditors");        
     });
 
     test("Browser doesn't open via Command when no URL set", async () => {
-        assert.ok(!await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID));
+        assert.ok(!await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID), "Command indicated failure");
         await delay(1 * 1000);
         await vscode.commands.executeCommand("workbench.action.closeAllEditors");
     });
@@ -304,27 +342,34 @@ suite("Command: Explicit Execution", function () {
 suite("Multiroot", function () {
     this.timeout(20 * 1000);
     this.beforeAll(() => {
-        assert.strictEqual(vscode.workspace.workspaceFolders!.length, 1);
+        assert.strictEqual(vscode.workspace.workspaceFolders!.length, 1, "We only want to add one folder");
+        // Monitor the folder being added
         const folderHasBeenAdded = waitForWorkspaceFoldersToReachTargetCount(2);
 
+        // The new folder is a _child_ of the `code-workspace` file, so we're
+        // going to take the base URI of that (which doesn't include the file)
+        // and append our second probject to it, and then add it
         const baseUri = vscode.workspace.workspaceFolders![0].uri;
         const secondProjectUri = vscode.Uri.joinPath(baseUri, "../sample-project2");
-
         vscode.workspace.updateWorkspaceFolders(1, null, { uri: secondProjectUri });
 
+        // Wait for confirmation its been added, and then ensure it's settings
+        // are reset to defaults.
         return folderHasBeenAdded.then(() => clearExtensionSettings());
     });
 
     this.afterAll(async () => {
+        // Always clear settings
         await clearExtensionSettings();
         
+        // Something already removed (or we failed to add) the second project
         if (vscode.workspace.workspaceFolders!.length === 1) {
             // We're in a good state, no need to clean up
             return;
         }
 
+        // Monitor for it being added, and wait
         const foldersAtTarget = waitForWorkspaceFoldersToReachTargetCount(1);
-
         vscode.workspace.updateWorkspaceFolders(1, vscode.workspace.workspaceFolders!.length - 1);
 
         return foldersAtTarget;
