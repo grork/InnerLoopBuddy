@@ -43,6 +43,11 @@ export type TaskCriteria = { [name: string]: any };
  */
 export type ActualTaskScope = vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder | undefined;
 
+export interface MatchedExecutionOccured {
+    occurances: number;
+    scope: ActualTaskScope;
+}
+
 /**
  * Callback that given an ActualTaskScope will return task criteria *only* for
  * that scope.
@@ -64,8 +69,12 @@ type Maybe<T> = T | undefined;
  * @param criteria Criteria to search for in the task 
  * @returns True if the task matches the criteria
  */
-export function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): boolean {
-    return criteria.some((c) => _.isMatch(task, c));
+export function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): ActualTaskScope {
+    if (criteria.some((c) => _.isMatch(task, c))) {
+        return task.scope;
+    }
+
+    return undefined;
 }
 
 /**
@@ -74,11 +83,13 @@ export function isTargetTask(task: vscode.Task, criteria: TaskCriteria[]): boole
  * @param resolver Callback to get criteria to find a matching task
  * @returns The matching criteria, if found.
  */
-export function isTargetTaskRunning(resolver: TaskCriteriaResolver): boolean {
-    return !!vscode.tasks.taskExecutions.find((executingTask: vscode.TaskExecution) => {
+export function isTargetTaskRunning(resolver: TaskCriteriaResolver): ActualTaskScope {
+    const executingTask = vscode.tasks.taskExecutions.find((executingTask: vscode.TaskExecution) => {
         const criteria = resolver(executingTask.task.scope);
-        return isTargetTask(executingTask.task, criteria);
+        return !!isTargetTask(executingTask.task, criteria);
     });
+
+    return executingTask?.task?.scope;
 }
 
 /**
@@ -174,6 +185,15 @@ function getCriteriaFromConfigurationForTaskScope(scope: ActualTaskScope): TaskC
     return criteria;
 }
 
+function keyFromScope(scope: ActualTaskScope): string {
+    if ((scope === vscode.TaskScope.Global)
+        || (scope === vscode.TaskScope.Workspace)) {
+        return "global";
+    }
+
+    return scope!.uri.toString();
+}
+
 /**
  * Monitors the current session to task starts, and if they match the supplied
  * criteria, and raises the `onDidMatchingTaskExecute` event if one starts
@@ -181,8 +201,8 @@ function getCriteriaFromConfigurationForTaskScope(scope: ActualTaskScope): TaskC
  */
 export class TaskMonitor {
     private subscriptions: { dispose(): any }[] = [];
-    private matchingTaskExecutedEmitter = new vscode.EventEmitter<number>();
-    private executionsMatched: number = 0;
+    private matchingTaskExecutedEmitter = new vscode.EventEmitter<MatchedExecutionOccured>();
+    private scopedOccurances = new Map<string, number>();
     
     /**
      * Constructs a new instance and *starts monitoring* for task executions
@@ -192,9 +212,10 @@ export class TaskMonitor {
      */
     constructor(private criteriaResolver: TaskCriteriaResolver = getCriteriaFromConfigurationForTaskScope) {
         vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this.subscriptions);
-        if (this.isTargetTaskRunning()) {
+        const runningTaskScope = this.isTargetTaskRunning();
+        if (runningTaskScope) {
             // If it was already running, we must have executed it once
-            this.executionsMatched = 1;
+            this.scopedOccurances.set(keyFromScope(runningTaskScope), 1);
         }
     }
 
@@ -213,8 +234,17 @@ export class TaskMonitor {
             return;
         }
 
-        this.executionsMatched += 1;
-        this.matchingTaskExecutedEmitter.fire(this.executionsMatched);
+        const key = keyFromScope(e.execution.task.scope);
+        let executedCount = this.scopedOccurances.get(key) || 0;
+
+        executedCount += 1;
+        const payload = {
+            occurances: executedCount,
+            scope: e.execution.task.scope
+        };
+
+        this.scopedOccurances.set(key, executedCount);
+        this.matchingTaskExecutedEmitter.fire(payload);
     }
 
     /**
@@ -222,11 +252,11 @@ export class TaskMonitor {
      * executing
      * @returns True if the task is currently executing
      */
-    isTargetTaskRunning(): boolean {
+    isTargetTaskRunning(): ActualTaskScope {
         return isTargetTaskRunning(this.criteriaResolver);
     }
 
-    get onDidMatchingTaskExecute(): vscode.Event<number> {
+    get onDidMatchingTaskExecute(): vscode.Event<MatchedExecutionOccured> {
         return this.matchingTaskExecutedEmitter.event;
     }
 }

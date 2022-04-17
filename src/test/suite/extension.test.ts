@@ -201,10 +201,10 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         const disposables: Throwaway[] = [];
         const echoTask = (await findTargetTask([ECHO_TASK_CRITERIA]))!;
 
-        const taskOberserved = getPromiseAndCompletion<number>();
+        const taskOberserved = getPromiseAndCompletion<impl.MatchedExecutionOccured>();
         const monitor = new impl.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
         disposables.push(monitor);
-        disposables.push(monitor.onDidMatchingTaskExecute((count) => taskOberserved.completion(count)));
+        disposables.push(monitor.onDidMatchingTaskExecute((e) => taskOberserved.completion(e)));
 
         assert.ok(!monitor.isTargetTaskRunning(), "task should not be running");
 
@@ -215,7 +215,8 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         assert.strictEqual(exitCode, 99, "Wrong exit code");
 
         const observedTaskExecutions = await taskOberserved.promise;
-        assert.strictEqual(observedTaskExecutions, 1, "Wrong number of task exections observed");
+        assert.strictEqual<number>(observedTaskExecutions.occurances, 1, "Wrong number of task exections observed");
+        assert.strictEqual<vscode.WorkspaceFolder>(observedTaskExecutions.scope, vscode.workspace.workspaceFolders![0], "Wrong scope");
 
         (vscode.Disposable.from(...disposables)).dispose();
     });
@@ -226,7 +227,7 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         let didObserveTaskStarting = -1;
         const monitor = new impl.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
         disposables.push(monitor);
-        disposables.push(monitor.onDidMatchingTaskExecute((count) => didObserveTaskStarting = count));
+        disposables.push(monitor.onDidMatchingTaskExecute((e) => didObserveTaskStarting = e.occurances));
 
         assert.ok(!monitor.isTargetTaskRunning(), "task should not be running");
 
@@ -256,14 +257,14 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         // Instantiate the monitor, and ensure it sees the task running
         const monitor = new impl.TaskMonitor(resolver);
         disposables.push(monitor);
-        assert.ok(monitor.isTargetTaskRunning(), "Task should have started");
+        assert.strictEqual(monitor.isTargetTaskRunning(), vscode.workspace.workspaceFolders![0], "Task should have started in the right scope");
 
         runningTask.terminate();
         assert.ok(await testSiteIsUnavailable());
 
         // Listen for the task starting event
         const taskOberserved = getPromiseAndCompletion<number>();
-        disposables.push(monitor.onDidMatchingTaskExecute((c) => taskOberserved.completion(c)));
+        disposables.push(monitor.onDidMatchingTaskExecute((e) => taskOberserved.completion(e.occurances)));
 
         // Start the stask
         runningTask = await vscode.tasks.executeTask(serveTask);
@@ -351,11 +352,11 @@ suite("Multiroot", function () {
         disposables.push(monitor);
         
         // Listen for the task from the first project
-        const taskWasStarted = getPromiseAndCompletion<number>();
+        const taskWasStarted = getPromiseAndCompletion<impl.MatchedExecutionOccured>();
         let observedEventInvocations = 0;
-        disposables.push(monitor.onDidMatchingTaskExecute((c) => {
+        disposables.push(monitor.onDidMatchingTaskExecute((e) => {
             observedEventInvocations += 1;
-            taskWasStarted.completion(c);
+            taskWasStarted.completion(e);
         }));
         assert.ok(!monitor.isTargetTaskRunning(), "task should not be running");
 
@@ -377,7 +378,8 @@ suite("Multiroot", function () {
         const echoTaskExitCode = await echoTaskExited;
         assert.strictEqual(echoTaskExitCode, 99, "Echo exit code was wrong")
         
-        assert.strictEqual(await taskWasStarted.promise, 1, "Wrong number of events");
+        assert.strictEqual((await taskWasStarted.promise).occurances, 1, "Wrong number of events");
+        assert.strictEqual((await taskWasStarted.promise).scope, vscode.workspace.workspaceFolders![0], "Wrong number of events");
         assert.strictEqual(observedEventInvocations, 1, "Should only see one event raised");
         
         vscode.Disposable.from(...disposables).dispose();
