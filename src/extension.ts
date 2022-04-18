@@ -10,6 +10,21 @@ export const OPEN_BROWSER_COMMAND_ID = `${EXTENSION_ID}.openDefaultUrl`;
 const SHOW_SETTINGS_BUTTON = "Configure in settings";
 
 /**
+ * Tests don't want the extension doing it's "thing", but we can't explicitly
+ * stop the tests from activating the extension. This flag disables init of the
+ * task monitoring etc.
+ */
+let SKIP_EXTENSION_INIT = false;
+
+/**
+ * Called by tests to disable the task monitoring and other "automatic"
+ * behaviour of the extension.
+ */
+export function disableAutomaticExtensionInit(): void {
+    SKIP_EXTENSION_INIT = true;
+}
+
+/**
  * What type of monitoring should happen
  */
 export const enum MonitoringType {
@@ -183,14 +198,21 @@ function getCriteriaFromConfigurationForTaskScope(scope: ActualTaskScope): TaskC
 
     // If it's been obtained from a specific workspace folder, lets use that.
     // Ultimately configuration will resolve
-    if ((scope !== vscode.TaskScope.Global)
-        && (scope !== vscode.TaskScope.Workspace)) {
+    if (isWorkspaceTaskScope(scope)) {
         const folderConfiguration = vscode.workspace.getConfiguration(EXTENSION_ID, <vscode.WorkspaceFolder>scope);
         const folderCriteria: TaskCriteria[] = folderConfiguration.get(MONITORED_TASKS_SETTING_SECTION)!;
         criteria.push(...folderCriteria);
     }
 
     return criteria;
+}
+
+/**
+ * Check if a scope is a workspace folder or 'global'
+ */
+function isWorkspaceTaskScope(taskScope: ActualTaskScope): boolean {
+    return ((taskScope !== vscode.TaskScope.Global)
+        && (taskScope !== vscode.TaskScope.Workspace));
 }
 
 /**
@@ -202,12 +224,23 @@ function getCriteriaFromConfigurationForTaskScope(scope: ActualTaskScope): TaskC
  * @returns String representation of that Scope
  */
 function keyFromScope(scope: ActualTaskScope): string {
-    if ((scope === vscode.TaskScope.Global)
-        || (scope === vscode.TaskScope.Workspace)) {
+    if (!isWorkspaceTaskScope(scope)) {
         return "global";
     }
 
-    return scope!.uri.toString();
+    return (<vscode.WorkspaceFolder>scope!).uri.toString();
+}
+
+/**
+ * Convience function to convert from task scope into a ConfigurationScope (Which
+ * is basically undefined or a workspace folder)
+ */
+function configurationScopeFromTaskScope(taskScope: ActualTaskScope): Maybe<vscode.ConfigurationScope> {
+    if (isWorkspaceTaskScope(taskScope)) {
+        return <vscode.WorkspaceFolder>taskScope;
+    }
+
+    return undefined;
 }
 
 /**
@@ -287,6 +320,69 @@ export class TaskMonitor {
  * Extension instance that manages the lifecycle of an extension in vscode.
  */
 export class InnerLoopBuddyExtension {
+    private _isInitialized: boolean = false;
+    private taskMonitor?: TaskMonitor;
+
+    constructor(private context: vscode.ExtensionContext) {
+        // Check if we're in a test
+        if (SKIP_EXTENSION_INIT) {
+            return;
+        }
+
+        this.initialize();
+    }
+
+    /**
+     * Have we performed initialization; intended to be checked by testing
+     */
+    get isInitialized(): boolean {
+        return this._isInitialized;
+    }
+
+    /**
+     * Perform initalization, such as listening for events & checking for tasks
+     * already running
+     */
+    initialize(): void {
+        this._isInitialized = true;
+        
+        const taskMonitor = new TaskMonitor();
+        this.taskMonitor = taskMonitor;
+        taskMonitor.onDidMatchingTaskExecute(this.handleMatchedTaskExecution, this, this.context.subscriptions);
+
+        const runningTask = taskMonitor.isMatchingTaskRunning();
+        if (runningTask) {
+            // This is the initialization path, we're going to make an
+            // assumption because of that. Task is running, so we _should_ run
+            // through the configuration for handling. Rather than factor a
+            // method, out, we're going to 'fake' the event param and use the
+            // event handler
+            this.handleMatchedTaskExecution({ occurances: 1, scope: runningTask.scope });
+        }
+    }
+
+    private handleMatchedTaskExecution(e: MatchedExecutionOccured): void {
+        const configurationScope = configurationScopeFromTaskScope(e.scope);
+        const configuration = vscode.workspace.getConfiguration(EXTENSION_ID, configurationScope);
+        const behaviour: MonitoringType = configuration.get(TASK_BEHAVIOUR_SETTING_SECTION)!;
+        
+        switch (behaviour) {
+            case MonitoringType.Everytime:
+                this.openSimpleBrowser(configurationScope);
+                break;
+            
+            case MonitoringType.OneTime:
+                if (e.occurances < 2) {
+                    this.openSimpleBrowser(configurationScope);
+                }
+                break;
+
+            default:
+            case MonitoringType.None:
+                break;
+        }
+    }
+
     /**
      * Opens the Simple Browser at the URL stored in configuration
      * @param scope Configuration scope to source the URL to open from
@@ -310,14 +406,17 @@ export class InnerLoopBuddyExtension {
             return Promise.resolve(false);
         }
 
-        return vscode.commands.executeCommand("simpleBrowser.api.open", vscode.Uri.parse(defaultBrowserUrl)).then(() => true);
+        return vscode.commands.executeCommand("simpleBrowser.api.open", vscode.Uri.parse(defaultBrowserUrl), { viewColumn: vscode.ViewColumn.Beside }).then(() => true);
     }
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    const instance = new InnerLoopBuddyExtension();
+    console.log("Extension activated. State:" + SKIP_EXTENSION_INIT);
+    const instance = new InnerLoopBuddyExtension(context);
 
     context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => {
         return instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION));
     }));
+
+    return instance;
 }

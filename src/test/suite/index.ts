@@ -1,8 +1,13 @@
 import * as path from "path";
 import * as Mocha from "mocha";
 import * as glob from "glob";
+import * as impl from "../../extension";
 
 export function run(): Promise<void> {
+    // Make sure the extension doesn't perform it's normal init so that tests
+    // have full control of the environment
+    impl.disableAutomaticExtensionInit();
+
     // Create the mocha test
     const mocha = new Mocha({
         ui: "tdd",

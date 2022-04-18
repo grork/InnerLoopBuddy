@@ -193,6 +193,13 @@ async function applyExtensionSettings(explicitSettings: ExplicitSettings, scope?
 suite("Infrastructure: Workspace under-test configuration validation", function () {
     this.beforeEach(async () => await clearExtensionSettings());
 
+    test("Extension can be obtained, and hasn't been initialized", () => {
+        const extension = vscode.extensions.getExtension(impl.EXTENSION_ID);
+        const instance: impl.InnerLoopBuddyExtension = extension!.exports;
+        assert.ok(instance, "Extension hasn't been activated");
+        assert.ok(!instance.isInitialized, "Extension shouldn't have been initialized");
+    });
+
     test("Sample workspace was opened", () => {
         assert.ok(vscode.workspace.workspaceFile, "Should have opened an actual workspace file");
         assert.ok(vscode.workspace.workspaceFile.path.endsWith("/sample.code-workspace"), "Wrong workspace opened");
