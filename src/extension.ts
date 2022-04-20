@@ -416,7 +416,6 @@ export class InnerLoopBuddyExtension {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log("Extension activated. State:" + SKIP_EXTENSION_INIT);
     const instance = new InnerLoopBuddyExtension(context);
 
     context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => {
