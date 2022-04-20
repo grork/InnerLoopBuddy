@@ -57,14 +57,19 @@
                 "title": "Inner Loop Buddy",
                 "properties": {
                     "codevoid.inner-loop-buddy.defaultUrl": {
-                        "title": "URL to open the browser too",
+                        "description": "URL to open the browser for",
                         "type": "string",
                         "default": null,
                         "scope": "resource"
                     },
+                    "codevoid.inner-loop-buddy.autoOpenDelay": {
+                        "description": "Delay (in ms) before opening the browser. Opening the browser may be dependent on the server completing initialization. By setting this value to non-zero, the delay of opening the browser can be configured till after that initialization",
+                        "type": "number",
+                        "scope": "resource",
+                        "default": 0
+                    },
                     "codevoid.inner-loop-buddy.editorColumn": {
-                        "title": "Editor column for the browser tab to open in",
-                        "markdownDescription": "See the [VS Code Documenation](https://code.visualstudio.com/api/references/vscode-api#ViewColumn) for more details on the behaviour",
+                        "markdownDescription": "Editor column for the browser tab to open in. See the [VS Code Documenation](https://code.visualstudio.com/api/references/vscode-api#ViewColumn) for more details on the behaviour",
                         "type": "string",
                         "default": "Beside",
                         "scope": "resource",
@@ -87,8 +92,7 @@
                         ]
                     },
                     "codevoid.inner-loop-buddy.monitoredTasks": {
-                        "title": "Task information to match for starting the browser",
-                        "markdownDescription": "The criteria used to determin if a browser tab should be opened. See [here](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
+                        "markdownDescription": "The criteria used to determine if a browser tab should be opened. See [documentation](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
                         "type": "array",
                         "scope": "resource",
                         "items": {
@@ -96,8 +100,7 @@
                         }
                     },
                     "codevoid.inner-loop-buddy.taskBehavior": {
-                        "title": "How to monitor tasks for execution",
-                        "markdownDescription": "When a matching task is executed, how should we handle different task executions. See [here](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
+                        "markdownDescription": "When a matching task is executed, how should we handle different task executions. See [documentation](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
                         "type": "string",
                         "default": "onetime",
                         "scope": "resource",

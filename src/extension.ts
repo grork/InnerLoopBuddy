@@ -7,6 +7,9 @@ export const DEFAULT_URL_SETTING_SECTION = "defaultUrl"
 export const TASK_BEHAVIOUR_SETTING_SECTION = "taskBehavior";
 export const OPEN_BROWSER_COMMAND_ID = `${EXTENSION_ID}.openDefaultUrl`;
 
+const AUTO_OPEN_DELAY_SETTING_SECTION = "autoOpenDelay";
+const EDITOR_COLUMN_SETTING_SECTION = "editorColumn";
+
 const SHOW_SETTINGS_BUTTON = "Configure in settings";
 
 /**
@@ -50,6 +53,8 @@ export const enum MonitoringType {
  * Type container for an instance or undefined (e.g. an optional)
  */
 export type Maybe<T> = T | undefined;
+
+function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)) }
 
 /**
  * Obtains a configuration scope from an active editor, or prompts for scope if
@@ -176,15 +181,16 @@ export class InnerLoopBuddyExtension {
         const configurationScope = configurationScopeFromTaskScope(e.scope);
         const configuration = vscode.workspace.getConfiguration(EXTENSION_ID, configurationScope);
         const behaviour: MonitoringType = configuration.get(TASK_BEHAVIOUR_SETTING_SECTION)!;
+        const autoOpenDelay = <number>configuration.get(AUTO_OPEN_DELAY_SETTING_SECTION);
 
         switch (behaviour) {
             case MonitoringType.Everytime:
-                this.openSimpleBrowser(configurationScope);
+                this.openSimpleBrowser(configurationScope, autoOpenDelay);
                 break;
 
             case MonitoringType.OneTime:
                 if (e.occurances < 2) {
-                    this.openSimpleBrowser(configurationScope);
+                    this.openSimpleBrowser(configurationScope, autoOpenDelay);
                 }
                 break;
 
@@ -199,7 +205,7 @@ export class InnerLoopBuddyExtension {
      * @param scope Configuration scope to source the URL to open from
      * @returns True if successfully opened
      */
-    openSimpleBrowser(scope: Maybe<vscode.ConfigurationScope>): Thenable<boolean> {
+    async openSimpleBrowser(scope: Maybe<vscode.ConfigurationScope>, autoOpenDelay: number = 0): Promise<boolean> {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID, scope);
         const defaultBrowserUrl = <string>config.get("defaultUrl");
         if (!defaultBrowserUrl) {
@@ -214,15 +220,21 @@ export class InnerLoopBuddyExtension {
                 return;
             });
 
-            return Promise.resolve(false);
+            return false;
         }
 
         // We definitely have a URL to open, so lets check which column we're
         // going to open to
-        const rawViewColumnValue = <string>config.get("editorColumn", "Beside");
+        const rawViewColumnValue = <string>config.get(EDITOR_COLUMN_SETTING_SECTION, "Beside");
         const apiViewColumn = <vscode.ViewColumn>vscode.ViewColumn[rawViewColumnValue as keyof typeof vscode.ViewColumn];
 
-        return vscode.commands.executeCommand("simpleBrowser.api.open", vscode.Uri.parse(defaultBrowserUrl), { viewColumn: apiViewColumn }).then(() => true);
+        if (autoOpenDelay) {
+            await delay(autoOpenDelay);
+        }
+
+        await vscode.commands.executeCommand("simpleBrowser.api.open", vscode.Uri.parse(defaultBrowserUrl), { viewColumn: apiViewColumn });
+        
+        return true;
     }
 }
 
