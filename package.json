@@ -62,8 +62,33 @@
                         "default": null,
                         "scope": "resource"
                     },
+                    "codevoid.inner-loop-buddy.editorColumn": {
+                        "title": "Editor column for the browser tab to open in",
+                        "markdownDescription": "See the [VS Code Documenation](https://code.visualstudio.com/api/references/vscode-api#ViewColumn) for more details on the behaviour",
+                        "type": "string",
+                        "default": "Beside",
+                        "scope": "resource",
+                        "enum": [
+                            "Active",
+                            "Beside",
+                            "One",
+                            "Two",
+                            "Three",
+                            "Four",
+                            "Five",
+                            "Six",
+                            "Seven",
+                            "Eight",
+                            "Nine"
+                        ],
+                        "enumDescriptions": [
+                            "Same editor column as the active editor",
+                            "In a new column beside the active editor"
+                        ]
+                    },
                     "codevoid.inner-loop-buddy.monitoredTasks": {
                         "title": "Task information to match for starting the browser",
+                        "markdownDescription": "The criteria used to determin if a browser tab should be opened. See [here](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
                         "type": "array",
                         "scope": "resource",
                         "items": {
@@ -72,6 +97,7 @@
                     },
                     "codevoid.inner-loop-buddy.taskBehavior": {
                         "title": "How to monitor tasks for execution",
+                        "markdownDescription": "When a matching task is executed, how should we handle different task executions. See [here](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
                         "type": "string",
                         "default": "onetime",
                         "scope": "resource",
@@ -81,7 +107,7 @@
                             "everytime"
                         ],
                         "enumDescriptions": [
-                            "Only open when manually invoked",
+                            "Don't open a browser tab when a matched task is executed",
                             "Open at most once per session",
                             "Open every time a matching task is started"
                         ]

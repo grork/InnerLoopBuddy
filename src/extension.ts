@@ -406,7 +406,12 @@ export class InnerLoopBuddyExtension {
             return Promise.resolve(false);
         }
 
-        return vscode.commands.executeCommand("simpleBrowser.api.open", vscode.Uri.parse(defaultBrowserUrl), { viewColumn: vscode.ViewColumn.Beside }).then(() => true);
+        // We definitely have a URL to open, so lets check which column we're
+        // going to open to
+        const rawViewColumnValue = <string>config.get("editorColumn", "Beside");
+        const apiViewColumn = <vscode.ViewColumn>vscode.ViewColumn[rawViewColumnValue as keyof typeof vscode.ViewColumn];
+
+        return vscode.commands.executeCommand("simpleBrowser.api.open", vscode.Uri.parse(defaultBrowserUrl), { viewColumn: apiViewColumn }).then(() => true);
     }
 }
 
