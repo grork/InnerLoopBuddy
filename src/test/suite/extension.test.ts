@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import fetch from "node-fetch";
 
 import * as impl from "../../extension";
+import * as monitor from "../../taskmonitor";
 
 const SERVE_TASK_TYPE = "npm";
 const SERVE_TASK_SCRIPT = "serve";
@@ -45,7 +46,7 @@ interface Throwaway {
 /**
  * For most tests, we just need to resolve one task, and the scope doesn't matter
  */
-function getTestTaskResolverForCriteria(taskToReturn: impl.TaskCriteria[]): (scope: impl.ActualTaskScope) => impl.TaskCriteria[] {
+function getTestTaskResolverForCriteria(taskToReturn: monitor.TaskCriteria[]): (scope: monitor.ActualTaskScope) => monitor.TaskCriteria[] {
     return () => {
         return taskToReturn;
     };
@@ -115,10 +116,10 @@ function getPromiseAndCompletion<T>(): { completion: (v: T) => any; promise: Pro
  * @param criteria Criteria to find a matching task
  * @returns Promise containing the task if there is a match; undefined otherwise.
  */
-export async function findTargetTask(criteria: impl.TaskCriteria[], taskScope?: impl.ActualTaskScope): Promise<vscode.Task | undefined> {
+export async function findTargetTask(criteria: monitor.TaskCriteria[], taskScope?: monitor.ActualTaskScope): Promise<vscode.Task | undefined> {
     const foundTasks = await vscode.tasks.fetchTasks();
     return foundTasks.find((task) => {
-        const taskMatches = impl.taskMatchesCriteria(task, criteria);
+        const taskMatches = monitor.taskMatchesCriteria(task, criteria);
         let isTargetScope = true;
         if (taskScope) {
             isTargetScope = task.scope == taskScope;
@@ -170,7 +171,7 @@ async function clearExtensionSettings(): Promise<void> {
     for (const config of configurations!) {
         for (const target of [vscode.ConfigurationTarget.Workspace, vscode.ConfigurationTarget.WorkspaceFolder]) {
             await config.update(impl.DEFAULT_URL_SETTING_SECTION, undefined, target);
-            await config.update(impl.MONITORED_TASKS_SETTING_SECTION, undefined, target);
+            await config.update(monitor.MONITORED_TASKS_SETTING_SECTION, undefined, target);
             await config.update(impl.TASK_BEHAVIOUR_SETTING_SECTION, undefined, target);
         }
     }
@@ -178,7 +179,7 @@ async function clearExtensionSettings(): Promise<void> {
 
 interface ExplicitSettings {
     defaultUrl?: string;
-    monitoredTasks?: impl.TaskCriteria[];
+    monitoredTasks?: monitor.TaskCriteria[];
     taskBehavior?: impl.MonitoringType;
 }
 
@@ -186,7 +187,7 @@ async function applyExtensionSettings(explicitSettings: ExplicitSettings, scope?
     const configuration = vscode.workspace.getConfiguration(impl.EXTENSION_ID, scope);
 
     await configuration.update(impl.DEFAULT_URL_SETTING_SECTION, explicitSettings.defaultUrl);
-    await configuration.update(impl.MONITORED_TASKS_SETTING_SECTION, explicitSettings.monitoredTasks);
+    await configuration.update(monitor.MONITORED_TASKS_SETTING_SECTION, explicitSettings.monitoredTasks);
     await configuration.update(impl.TASK_BEHAVIOUR_SETTING_SECTION, explicitSettings.taskBehavior);
 }
 
@@ -235,13 +236,13 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         const echoTask = (await findTargetTask([ECHO_TASK_CRITERIA]))!;
 
         // Begin monitoring the task
-        const taskOberserved = getPromiseAndCompletion<impl.MatchedExecutionOccured>();
-        const monitor = new impl.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
-        disposables.push(monitor);
-        disposables.push(monitor.onDidMatchingTaskExecute((e) => taskOberserved.completion(e)));
+        const taskOberserved = getPromiseAndCompletion<monitor.MatchedExecutionOccured>();
+        const m = new monitor.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
+        disposables.push(m);
+        disposables.push(m.onDidMatchingTaskExecute((e) => taskOberserved.completion(e)));
 
         // We don't want it running yet
-        assert.ok(!monitor.isMatchingTaskRunning(), "task should not be running");
+        assert.ok(!m.isMatchingTaskRunning(), "task should not be running");
 
         // Prepare to wait for the task completion
         const processTerminated = waitForTaskProcessToEnd(echoTask);
@@ -267,12 +268,12 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         let didObserveTaskStarting = -1;
 
         // Monitor tasks being executed
-        const monitor = new impl.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
-        disposables.push(monitor);
-        disposables.push(monitor.onDidMatchingTaskExecute((e) => didObserveTaskStarting = e.occurances));
+        const m = new monitor.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA]));
+        disposables.push(m);
+        disposables.push(m.onDidMatchingTaskExecute((e) => didObserveTaskStarting = e.occurances));
 
         // We dont want it runnign
-        assert.ok(!monitor.isMatchingTaskRunning(), "task should not be running");
+        assert.ok(!m.isMatchingTaskRunning(), "task should not be running");
 
         // Execute the not-the-target-task
         const npmInstall = await findTargetTask([{ "definition": { "type": "shell" }, "name": "install" }]);
@@ -293,23 +294,23 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         const disposables: Throwaway[] = [];
         const resolver = getTestTaskResolverForCriteria([SERVE_TASK_CRITERIA]);
         const serveTask = (await findTargetTask([SERVE_TASK_CRITERIA]))!;
-        assert.ok(!impl.isMatchingTaskRunning(resolver), "task should not be running");
+        assert.ok(!monitor.isMatchingTaskRunning(resolver), "task should not be running");
 
         // Start the task & make sure it's running
         let runningTask = await vscode.tasks.executeTask(serveTask);
         assert.ok(await testSiteIsAvailable(), "test site didn't start");
 
         // Instantiate the monitor, and ensure it sees the task running
-        const monitor = new impl.TaskMonitor(resolver);
-        disposables.push(monitor);
-        assert.strictEqual(monitor.isMatchingTaskRunning()?.scope, vscode.workspace.workspaceFolders![0], "Task should have started in the right scope");
+        const m = new monitor.TaskMonitor(resolver);
+        disposables.push(m);
+        assert.strictEqual(m.isMatchingTaskRunning()?.scope, vscode.workspace.workspaceFolders![0], "Task should have started in the right scope");
 
         runningTask.terminate();
         assert.ok(await testSiteIsUnavailable(), "test site still up");
 
         // Listen for the task starting event
         const taskOberserved = getPromiseAndCompletion<number>();
-        disposables.push(monitor.onDidMatchingTaskExecute((e) => taskOberserved.completion(e.occurances)));
+        disposables.push(m.onDidMatchingTaskExecute((e) => taskOberserved.completion(e.occurances)));
 
         // Start the stask
         runningTask = await vscode.tasks.executeTask(serveTask);
@@ -400,17 +401,17 @@ suite("Multiroot", function () {
         const defaultEchoTask = (await findTargetTask([ECHO_TASK_CRITERIA], targetFolder))!;
 
         // Start task monitoring
-        const monitor = new impl.TaskMonitor();
-        disposables.push(monitor);
+        const m = new monitor.TaskMonitor();
+        disposables.push(m);
         
         // Listen for the task from the first project
-        const taskWasStarted = getPromiseAndCompletion<impl.MatchedExecutionOccured>();
+        const taskWasStarted = getPromiseAndCompletion<monitor.MatchedExecutionOccured>();
         let observedEventInvocations = 0;
-        disposables.push(monitor.onDidMatchingTaskExecute((e) => {
+        disposables.push(m.onDidMatchingTaskExecute((e) => {
             observedEventInvocations += 1;
             taskWasStarted.completion(e);
         }));
-        assert.ok(!monitor.isMatchingTaskRunning(), "task should not be running");
+        assert.ok(!m.isMatchingTaskRunning(), "task should not be running");
 
         // Start the task from the *other* project, which shouldn't result
         // in the task triggering.
