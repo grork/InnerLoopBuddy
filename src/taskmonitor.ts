@@ -4,6 +4,8 @@ import type { Maybe } from "./extension";
 import * as _ from "lodash";
 
 export const MONITORED_TASKS_SETTING_SECTION = "monitoredTasks";
+export const MONITORING_MODE_SETTING_SECTION = "taskMonitoringMode";
+
 /**
  * The information to match a specific task when trying to open a browser. The
  * information is "deep equality" checked against the `vscode.Task` instance. If
@@ -15,6 +17,21 @@ export type TaskCriteria = { [name: string]: any };
  * Helper type since the TaskScope in vscode.d.ts isn't exported, we need our own
  */
 export type ActualTaskScope = vscode.TaskScope.Global | vscode.TaskScope.Workspace | vscode.WorkspaceFolder | undefined;
+
+/**
+ * When tasks start, should we match criteria, or just any task
+ */
+ export const enum MonitoringMode {
+    /**
+     * Only tasks that match one of the configured criteria
+     */
+    Matching = "matching",
+
+    /**
+     * All tasks that are executed; irrespective of if they match
+     */
+    All = "all"
+}
 
 /**
  * When a matched execution is seen, the event raises this payload for the scope
@@ -41,7 +58,7 @@ export interface MatchedExecutionOccured {
  * workspace, and folder. We want to match task criteria that is releveant e.g.
  * that which is defined for the scope the task is sourced from.
  */
-type TaskCriteriaResolver = (e: ActualTaskScope) => TaskCriteria[];
+type TaskMonitoringConfigurationResolver = (e: ActualTaskScope) => { criteria: TaskCriteria[], mode: MonitoringMode };
 
 /**
  * Checks if the supplied task matches the criteria required
@@ -59,10 +76,10 @@ export function taskMatchesCriteria(task: vscode.Task, criteria: TaskCriteria[])
  * @param resolver Callback to get criteria to find a matching task
  * @returns The matching criteria, if found.
  */
-export function isMatchingTaskRunning(resolver: TaskCriteriaResolver): Maybe<vscode.Task> {
+export function isMatchingTaskRunning(resolver: TaskMonitoringConfigurationResolver): Maybe<vscode.Task> {
     const executingTask = vscode.tasks.taskExecutions.find((executingTask: vscode.TaskExecution) => {
         const criteria = resolver(executingTask.task.scope);
-        return !!taskMatchesCriteria(executingTask.task, criteria);
+        return !!taskMatchesCriteria(executingTask.task, criteria.criteria);
     });
 
     return executingTask?.task;
@@ -87,21 +104,27 @@ export function isWorkspaceTaskScope(taskScope: ActualTaskScope): boolean {
  * lets us 'catch them all' -- and duplicates are fine since we'll stop at the
  * first match.
  * 
- * @param scope The scope for which to resolve the configuration at
+ * @param scope The scope for which to resolve the configuration
  */
- function getCriteriaFromConfigurationForTaskScope(scope: ActualTaskScope): TaskCriteria[] {
+function getMonitoringConfigurationForTaskScope(scope: ActualTaskScope): { criteria: TaskCriteria[], mode: MonitoringMode } {
     // Get the global/workspace configuration. 
     const criteria: TaskCriteria[] = vscode.workspace.getConfiguration(ext.EXTENSION_ID).get(MONITORED_TASKS_SETTING_SECTION, []);
+    const resolvingScope = (isWorkspaceTaskScope(scope) ? <vscode.WorkspaceFolder>scope : undefined);
 
     // If it's been obtained from a specific workspace folder, lets use that.
     // Ultimately configuration will resolve
-    if (isWorkspaceTaskScope(scope)) {
-        const folderConfiguration = vscode.workspace.getConfiguration(ext.EXTENSION_ID, <vscode.WorkspaceFolder>scope);
+    if (resolvingScope) {
+        const folderConfiguration = vscode.workspace.getConfiguration(ext.EXTENSION_ID, resolvingScope);
         const folderCriteria: TaskCriteria[] = folderConfiguration.get(MONITORED_TASKS_SETTING_SECTION)!;
         criteria.push(...folderCriteria);
     }
 
-    return criteria;
+    const mode: MonitoringMode = <MonitoringMode>(vscode.workspace.getConfiguration(ext.EXTENSION_ID, resolvingScope).get(MONITORING_MODE_SETTING_SECTION));
+
+    return {
+        criteria,
+        mode
+    };
 }
 
 /**
@@ -133,10 +156,10 @@ export class TaskMonitor {
     /**
      * Constructs a new instance and *starts monitoring* for task executions
      * that match the supplied criteria.
-     * @param criteriaResolver Called to resolve the configuration for the
+     * @param configurationResolver Called to resolve the configuration for the
      *        executing task
      */
-    constructor(private criteriaResolver: TaskCriteriaResolver = getCriteriaFromConfigurationForTaskScope) {
+    constructor(private configurationResolver: TaskMonitoringConfigurationResolver = getMonitoringConfigurationForTaskScope) {
         vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this.subscriptions);
         const runningTask = this.isMatchingTaskRunning();
         if (runningTask) {
@@ -154,8 +177,12 @@ export class TaskMonitor {
     }
 
     private handleTaskStarting(e: vscode.TaskStartEvent): void {
-        const criteria = this.criteriaResolver(e.execution.task.scope);
-        if (!taskMatchesCriteria(e.execution.task, criteria)) {
+        const config = this.configurationResolver(e.execution.task.scope);
+
+        // If there are no matching tasks, and we're expected to only monitor
+        // for matching tasks, theres nothing else to do -- we don't want to
+        // raise the event
+        if (!taskMatchesCriteria(e.execution.task, config.criteria) && config.mode === MonitoringMode.Matching) {
             // Not our task, nothing to do
             return;
         }
@@ -179,7 +206,7 @@ export class TaskMonitor {
      * @returns True if the task is currently executing
      */
     isMatchingTaskRunning(): Maybe<vscode.Task> {
-        return isMatchingTaskRunning(this.criteriaResolver);
+        return isMatchingTaskRunning(this.configurationResolver);
     }
 
     /**

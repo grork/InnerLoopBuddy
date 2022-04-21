@@ -4,7 +4,7 @@ import * as monitor from "./taskmonitor";
 export const EXTENSION_ID = "codevoid.inner-loop-buddy";
 
 export const DEFAULT_URL_SETTING_SECTION = "defaultUrl"
-export const TASK_BEHAVIOUR_SETTING_SECTION = "taskBehavior";
+export const MATCHED_TASK_BEHAVIOUR_SETTING_SECTION = "matchedTaskBehavior";
 export const OPEN_BROWSER_COMMAND_ID = `${EXTENSION_ID}.openDefaultUrl`;
 
 const AUTO_OPEN_DELAY_SETTING_SECTION = "autoOpenDelay";
@@ -30,7 +30,7 @@ export function disableAutomaticExtensionInit(): void {
 /**
  * What type of monitoring should happen
  */
-export const enum MonitoringType {
+export const enum MatchedTaskBehaviour {
     /**
      * There is no monitoring, and only manual command invocation is available
      */
@@ -180,22 +180,22 @@ export class InnerLoopBuddyExtension {
     private handleMatchedTaskExecution(e: monitor.MatchedExecutionOccured): void {
         const configurationScope = configurationScopeFromTaskScope(e.scope);
         const configuration = vscode.workspace.getConfiguration(EXTENSION_ID, configurationScope);
-        const behaviour: MonitoringType = configuration.get(TASK_BEHAVIOUR_SETTING_SECTION)!;
+        const behaviour: MatchedTaskBehaviour = configuration.get(MATCHED_TASK_BEHAVIOUR_SETTING_SECTION)!;
         const autoOpenDelay = <number>configuration.get(AUTO_OPEN_DELAY_SETTING_SECTION);
 
         switch (behaviour) {
-            case MonitoringType.Everytime:
+            case MatchedTaskBehaviour.Everytime:
                 this.openSimpleBrowser(configurationScope, autoOpenDelay);
                 break;
 
-            case MonitoringType.OneTime:
+            case MatchedTaskBehaviour.OneTime:
                 if (e.occurances < 2) {
                     this.openSimpleBrowser(configurationScope, autoOpenDelay);
                 }
                 break;
 
             default:
-            case MonitoringType.None:
+            case MatchedTaskBehaviour.None:
                 break;
         }
     }

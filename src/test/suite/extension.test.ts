@@ -47,9 +47,12 @@ interface Throwaway {
 /**
  * For most tests, we just need to resolve one task, and the scope doesn't matter
  */
-function getTestTaskResolverForCriteria(taskToReturn: monitor.TaskCriteria[]): (scope: monitor.ActualTaskScope) => monitor.TaskCriteria[] {
+function getTestTaskResolverForCriteria(criteria: monitor.TaskCriteria[], mode: monitor.MonitoringMode = monitor.MonitoringMode.Matching): (scope: monitor.ActualTaskScope) => { criteria: monitor.TaskCriteria[]; mode: monitor.MonitoringMode } {
     return () => {
-        return taskToReturn;
+        return {
+            criteria,
+            mode
+        }
     };
 }
 
@@ -173,7 +176,8 @@ async function clearExtensionSettings(): Promise<void> {
         for (const target of [vscode.ConfigurationTarget.Workspace, vscode.ConfigurationTarget.WorkspaceFolder]) {
             await config.update(impl.DEFAULT_URL_SETTING_SECTION, undefined, target);
             await config.update(monitor.MONITORED_TASKS_SETTING_SECTION, undefined, target);
-            await config.update(impl.TASK_BEHAVIOUR_SETTING_SECTION, undefined, target);
+            await config.update(impl.MATCHED_TASK_BEHAVIOUR_SETTING_SECTION, undefined, target);
+            await config.update(monitor.MONITORING_MODE_SETTING_SECTION, undefined, target);
         }
     }
 }
@@ -181,7 +185,8 @@ async function clearExtensionSettings(): Promise<void> {
 interface ExplicitSettings {
     defaultUrl?: string;
     monitoredTasks?: monitor.TaskCriteria[];
-    taskBehavior?: impl.MonitoringType;
+    matchedTaskBehaviour?: impl.MatchedTaskBehaviour;
+    taskMonitoringBehaviour?: monitor.MonitoringMode;
 }
 
 async function applyExtensionSettings(explicitSettings: ExplicitSettings, scope?: vscode.ConfigurationScope): Promise<void> {
@@ -189,7 +194,8 @@ async function applyExtensionSettings(explicitSettings: ExplicitSettings, scope?
 
     await configuration.update(impl.DEFAULT_URL_SETTING_SECTION, explicitSettings.defaultUrl);
     await configuration.update(monitor.MONITORED_TASKS_SETTING_SECTION, explicitSettings.monitoredTasks);
-    await configuration.update(impl.TASK_BEHAVIOUR_SETTING_SECTION, explicitSettings.taskBehavior);
+    await configuration.update(impl.MATCHED_TASK_BEHAVIOUR_SETTING_SECTION, explicitSettings.matchedTaskBehaviour);
+    await configuration.update(monitor.MONITORING_MODE_SETTING_SECTION, explicitSettings.taskMonitoringBehaviour);
 }
 
 suite("Infrastructure: Workspace under-test configuration validation", function () {
@@ -273,14 +279,14 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         disposables.push(m);
         disposables.push(m.onDidMatchingTaskExecute((e) => didObserveTaskStarting = e.occurances));
 
-        // We dont want it runnign
+        // We dont want it running
         assert.ok(!m.isMatchingTaskRunning(), "task should not be running");
 
         // Execute the not-the-target-task
         const npmInstall = await findTargetTask([{ "definition": { "type": "shell" }, "name": "install" }]);
         assert.ok(!!npmInstall, "NPM Install Shell Task not found");
 
-        // Wiat for it to wrap up
+        // Wait for it to wrap up
         const notShellTaskComplete = waitForTaskProcessToEnd(npmInstall);
         await vscode.tasks.executeTask(npmInstall);
         await notShellTaskComplete;
@@ -320,6 +326,34 @@ suite("TaskMonitor: Task Discovery & Monitoring", function () {
         assert.ok(await testSiteIsUnavailable(), "test site was still up");
 
         assert.strictEqual(await taskOberserved.promise, 2, "Not enough task executions");
+
+        vscode.Disposable.from(...disposables).dispose();
+    });
+
+    test("Event is raised when a non-matching task is executed, and mode is set to all", async () => {
+        const disposables: Throwaway[] = [];
+
+        let didObserveTaskStarting = -1;
+
+        // Monitor tasks being executed
+        const m = new monitor.TaskMonitor(getTestTaskResolverForCriteria([ECHO_TASK_CRITERIA], monitor.MonitoringMode.All));
+        disposables.push(m);
+        disposables.push(m.onDidMatchingTaskExecute((e) => didObserveTaskStarting = e.occurances));
+
+        // We dont want it running
+        assert.ok(!m.isMatchingTaskRunning(), "task should not be running");
+
+        // Execute the not-the-target-task
+        const npmInstall = await findTargetTask([{ "definition": { "type": "shell" }, "name": "install" }]);
+        assert.ok(!!npmInstall, "NPM Install Shell Task not found");
+
+        // Wiat for it to wrap up
+        const notShellTaskComplete = waitForTaskProcessToEnd(npmInstall);
+        await vscode.tasks.executeTask(npmInstall);
+        await notShellTaskComplete;
+
+        // We should have seen one task start
+        assert.strictEqual(didObserveTaskStarting, 1, "Task shouldn't have been executed");
 
         vscode.Disposable.from(...disposables).dispose();
     });

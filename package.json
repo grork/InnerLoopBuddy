@@ -91,6 +91,19 @@
                             "In a new column beside the active editor"
                         ]
                     },
+                    "codevoid.inner-loop-buddy.taskMonitoringMode": {
+                        "type": "string",
+                        "scope": "resource",
+                        "default": "matching",
+                        "enum":[
+                            "matching",
+                            "all"
+                        ],
+                        "enumDescriptions": [
+                            "Only task that match the configured criteria",
+                            "All tasks that are executed"
+                        ]
+                    },
                     "codevoid.inner-loop-buddy.monitoredTasks": {
                         "markdownDescription": "The criteria used to determine if a browser tab should be opened. See [documentation](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
                         "type": "array",
@@ -99,7 +112,7 @@
                             "type": "object"
                         }
                     },
-                    "codevoid.inner-loop-buddy.taskBehavior": {
+                    "codevoid.inner-loop-buddy.matchedTaskBehavior": {
                         "markdownDescription": "When a matching task is executed, how should we handle different task executions. See [documentation](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
                         "type": "string",
                         "default": "onetime",
