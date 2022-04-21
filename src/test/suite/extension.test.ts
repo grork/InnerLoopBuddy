@@ -4,6 +4,7 @@ import fetch from "node-fetch";
 
 import * as impl from "../../extension";
 import * as monitor from "../../taskmonitor";
+import _ = require("lodash");
 
 const SERVE_TASK_TYPE = "npm";
 const SERVE_TASK_SCRIPT = "serve";
@@ -462,5 +463,18 @@ suite("Multiroot", function () {
         assert.ok(!(await vscode.commands.executeCommand(impl.OPEN_BROWSER_COMMAND_ID)), "Command Shouldn't have executed");
         await delay(1 * 1000);
         await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+    });
+});
+
+suite("Task Conversion", function() {
+    test("Task can be splified & used to find object", async () => {
+        const echoTask = (await findTargetTask([ECHO_TASK_CRITERIA]))!;
+        const criteria = monitor.fromTaskToCriteria(echoTask);
+        assert.ok(criteria);
+
+        // Try to find the task again using the generated criteria
+        const sameEchoTask = (await findTargetTask([criteria]))!;
+        assert.ok(sameEchoTask, "Criteria didn't find echo task from generated criteria");
+        assert.deepStrictEqual(sameEchoTask, echoTask, "Tasks didn't match");        
     });
 });

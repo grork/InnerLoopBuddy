@@ -192,3 +192,106 @@ export class TaskMonitor {
         return this.matchingTaskExecutedEmitter.event;
     }
 }
+
+/**
+ * Properties from a task that are noisy, not useful, or generally confusing.
+ * We don't want to output them 'cause they distract from helping someone create
+ * criteria that will match their own task
+ */
+const propertiesToExclude = [
+    "target",
+    "detail",
+    "problemMatchers",
+    "scope",
+    "hasDefinedMatchers",
+    "options",
+    "id",
+];
+
+/**
+ * Check if the property + value are 'insteresting'. We filter things in
+ * `propertiesToExclude`, and things that are `Function`s.
+ * @returns True if this is not an interesting field
+ */
+function isUninteresting(prop: string, instance: any): boolean {
+    if (prop.startsWith("_")) {
+        return true;
+    }
+
+    if (instance[prop] instanceof Function) {
+        return true;
+    }
+
+    return propertiesToExclude.includes(prop);
+}
+
+/**
+ * Given an instance of _something_, convert it into something friendlier to
+ * humans (E.g. just data). This isn't intended to be universal, and instead
+ * scoped to the convesion of vscode.Task to something a human can put in their
+ * configuration and use to match a task.
+ *
+ * This will recursively traverse the objects properties until it runs out of
+ * things to simplify
+ * @param instance Instance to simplify
+ * @returns Object instance with simplified property values.
+ */
+function simplify(instance: any): any {
+    const result: any = {};
+    const og = instance;
+
+    // We can't simplify strings, since they should just be strings. If we find
+    // one, just return it
+    if (typeof(instance) === "string") {
+        return instance;
+    }
+
+    // Enumerate visible properties down the prototype chain.
+    do {
+        // Get the property names from the prototype
+        for (const p of Object.getOwnPropertyNames(instance)) {
+            if (isUninteresting(p, og)) {
+                // We don't care about unintersting values
+                continue;
+            }
+
+            // Get the value from the *original* object, not the 'prototype'
+            // instance, which is unlikely to be where the values are stored. If
+            // it is in the prototype, this will sill resolve it.
+            let value = og[p];
+            if (Array.isArray(value)) {
+                // Arrays are special, handle them with care
+                const items = (<[]>value).map(simplify);
+                value = (items.length ? items : undefined);
+            } else if (typeof value === "object") {
+                // Objects should be simplified recursively
+                value = simplify(value);
+            }
+
+            if (value === undefined) {
+                continue;
+            }
+            
+            result[p] = value;
+        }
+    } while (instance = Object.getPrototypeOf(instance));
+
+    // If we've produced an empty object, then we should return undefined
+    // rather than an empty object.
+    if (Object.keys(result).length === 0) {
+        return undefined;
+    }
+
+    return result;
+}
+
+/**
+ * Convert from a vscode.Task to a TaskCriteria e.g. simplify it from an
+ * instance of a class to a property bag of stuff
+ * @param task Task to convert
+ * @returns Simple data object of serializable fields
+ */
+export function fromTaskToCriteria(task: vscode.Task): TaskCriteria {
+    const criteria = simplify(task);
+    return criteria;
+}
