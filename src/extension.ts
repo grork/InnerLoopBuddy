@@ -57,6 +57,14 @@ export type Maybe<T> = T | undefined;
 
 function delay(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)) }
 
+function scopeToName(scope: monitor.ActualTaskScope): string {
+    if (monitor.isWorkspaceTaskScope(scope)) {
+        return (<vscode.WorkspaceFolder>scope).name;
+    }
+
+    return (scope === vscode.TaskScope.Workspace) ? "Workspace" : "Global";
+}
+
 /**
  * Obtains a configuration scope from an active editor, or prompts for scope if
  * it can't be determined from the workspace itself. It does this by leveraging
@@ -138,9 +146,38 @@ function configurationScopeFromTaskScope(taskScope: monitor.ActualTaskScope): Ma
  * - Items from a workspace, sorted alphabetically
  * - Items by source, sorted alphabetically
  */
-function sortTasksBySourceThenName(a: vscode.Task, b: vscode.Task): number {
-    if (a.source == b.source && a.name === b.name) {
+function sortTasksByScopeThenSourceThenName(a: vscode.Task, b: vscode.Task): number {
+    if (a.source == b.source
+        && a.name === b.name
+        && a.scope === b.scope) {
         return 0;
+    }
+
+    if (a.scope !== b.scope) {
+        // Sort by workspace folder name if they're both folders
+        if (monitor.isWorkspaceTaskScope(a.scope) && monitor.isWorkspaceTaskScope(b.scope)) {
+            const nameA = (<vscode.WorkspaceFolder>a.scope).name;
+            const nameB = (<vscode.WorkspaceFolder>b.scope).name
+
+            return (nameA.localeCompare(nameB));
+        }
+
+        // Both are Actual scopes
+        if (!monitor.isWorkspaceTaskScope(a.scope) && !monitor.isWorkspaceTaskScope(b.scope)) {
+            const scopeA = <vscode.TaskScope>a.scope;
+            const scopeB = <vscode.TaskScope>b.scope;
+
+            return (scopeA - scopeB) * -1;
+        }
+
+        // A is a folder, but B is not, put A first
+        if (monitor.isWorkspaceTaskScope(a.scope)) {
+            return -1;
+        }
+
+        if (monitor.isWorkspaceTaskScope(b.scope)) {
+            return 1;
+        }
     }
 
     // Force the workspace items first
@@ -272,24 +309,44 @@ export class InnerLoopBuddyExtension {
      * @returns Promise that completes when the task is, uh, complete
      */
     async printTaskCriteriaToChannel(): Promise<void> {
-        let tasks = (await vscode.tasks.fetchTasks()).sort(sortTasksBySourceThenName);
+        let tasks = (await vscode.tasks.fetchTasks()).sort(sortTasksByScopeThenSourceThenName);
+        const createdGroups = new Set<string>();
 
-        const pickerItems: (vscode.QuickPickItem & { task?: vscode.Task})[] = tasks.map((t) => {
-            return {
-                label: t.name,
-                detail: t.detail,
-                description: t.source,
-                task: t
-            };
-        });
+        const pickerItems =
+            tasks.reduce((p: (vscode.QuickPickItem & { task?: vscode.Task })[], t: vscode.Task) => {
+                const group = scopeToName(t.scope);
+                if (!createdGroups.has(group)) {
+                    // Add seperator
+                    p.push({
+                        kind: vscode.QuickPickItemKind.Separator,
+                        label: group
+                    });
+                    createdGroups.add(group);
+                }
+
+                p.push({
+                    label: t.name,
+                    detail: t.detail,
+                    description: group,
+                    task: t
+                })
+
+                return p;
+            }, []);
 
         // Place an item for 'all' at the end. This doesn't contain a task,
         // which will be used to distinguished from real task items
         pickerItems.push({
+            label: "",
+            kind: vscode.QuickPickItemKind.Separator
+        });
+
+        pickerItems.push({
             label: "All",
             description: "Print criteria for all tasks",
-        })
+        });
 
+        // Show it, and wait for the user to pick something for us to operate on
         const pickedItem = await vscode.window.showQuickPick(pickerItems);
         if (!pickedItem) {
             // They didn't pick anything, so we don't need to do anything
