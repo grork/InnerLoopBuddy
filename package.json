@@ -42,12 +42,21 @@
                 "title": "Open Default URL",
                 "category": "Inner Loop Buddy"
                 
+            },
+            {
+                "command": "codevoid.inner-loop-buddy.printTaskCriteriaJson",
+                "title": "Print Task configuration as matching criteria configuration",
+                "category": "Inner Loop Buddy"
             }
         ],
         "menus": {
             "commandPalette": [
                 {
                     "command": "codevoid.inner-loop-buddy.openDefaultUrl",
+                    "when": "workbenchState != 'empty'"
+                },
+                {
+                    "command": "codevoid.inner-loop-buddy.printTaskCriteriaJson",
                     "when": "workbenchState != 'empty'"
                 }
             ]

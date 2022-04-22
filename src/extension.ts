@@ -6,6 +6,7 @@ export const EXTENSION_ID = "codevoid.inner-loop-buddy";
 export const DEFAULT_URL_SETTING_SECTION = "defaultUrl"
 export const MATCHED_TASK_BEHAVIOUR_SETTING_SECTION = "matchedTaskBehavior";
 export const OPEN_BROWSER_COMMAND_ID = `${EXTENSION_ID}.openDefaultUrl`;
+export const PRINT_TASK_CRITERIA_COMMAND_ID = `${EXTENSION_ID}.printTaskCriteriaJson`;
 
 const AUTO_OPEN_DELAY_SETTING_SECTION = "autoOpenDelay";
 const EDITOR_COLUMN_SETTING_SECTION = "editorColumn";
@@ -133,11 +134,38 @@ function configurationScopeFromTaskScope(taskScope: monitor.ActualTaskScope): Ma
 }
 
 /**
+ * Sorting function that places tasks in a humand friendly order:
+ * - Items from a workspace, sorted alphabetically
+ * - Items by source, sorted alphabetically
+ */
+function sortTasksBySourceThenName(a: vscode.Task, b: vscode.Task): number {
+    if (a.source == b.source && a.name === b.name) {
+        return 0;
+    }
+
+    // Force the workspace items first
+    if (a.source === "Workspace" && b.source !== "Workspace") {
+        return -1;
+    }
+
+    if (a.source < b.source) {
+        return -1;
+    }
+
+    if (a.source > b.source) {
+        return 1;
+    }
+
+    return (a.name.localeCompare(b.name));
+}
+
+/**
  * Extension instance that manages the lifecycle of an extension in vscode.
  */
 export class InnerLoopBuddyExtension {
     private _isInitialized: boolean = false;
     private taskMonitor?: monitor.TaskMonitor;
+    private criteriaOutput?: vscode.OutputChannel;
 
     constructor(private context: vscode.ExtensionContext) {
         // Check if we're in a test
@@ -236,14 +264,59 @@ export class InnerLoopBuddyExtension {
         
         return true;
     }
+
+    /**
+     * Prompt the user for a task to output criteria for, and then print to a
+     * dedicated output channel if one is selected. Adds an 'All' item to
+     * output all criteria
+     * @returns Promise that completes when the task is, uh, complete
+     */
+    async printTaskCriteriaToChannel(): Promise<void> {
+        let tasks = (await vscode.tasks.fetchTasks()).sort(sortTasksBySourceThenName);
+
+        const pickerItems: (vscode.QuickPickItem & { task?: vscode.Task})[] = tasks.map((t) => {
+            return {
+                label: t.name,
+                detail: t.detail,
+                description: t.source,
+                task: t
+            };
+        });
+
+        // Place an item for 'all' at the end. This doesn't contain a task,
+        // which will be used to distinguished from real task items
+        pickerItems.push({
+            label: "All",
+            description: "Print criteria for all tasks",
+        })
+
+        const pickedItem = await vscode.window.showQuickPick(pickerItems);
+        if (!pickedItem) {
+            // They didn't pick anything, so we don't need to do anything
+            return;
+        }
+
+        // If we had a task, use that; otherwise use all the tasks
+        if (pickedItem.task) {
+            tasks = [pickedItem.task];
+        }
+
+        const criteria = tasks.map(monitor.fromTaskToCriteria);
+        if (!this.criteriaOutput) {
+            this.criteriaOutput = vscode.window.createOutputChannel("Inner Loop Buddy: Criteria Log");
+        }
+        
+        this.criteriaOutput.clear();
+        this.criteriaOutput.append(JSON.stringify(criteria, null, 4));
+        this.criteriaOutput.show();
+    }
 }
 
 export function activate(context: vscode.ExtensionContext) {
     const instance = new InnerLoopBuddyExtension(context);
 
-    context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => {
-        return instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION));
-    }));
+    context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION))));
+    context.subscriptions.push(vscode.commands.registerCommand(PRINT_TASK_CRITERIA_COMMAND_ID, instance.printTaskCriteriaToChannel, instance));
 
     return instance;
 }

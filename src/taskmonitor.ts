@@ -233,6 +233,9 @@ const propertiesToExclude = [
     "hasDefinedMatchers",
     "options",
     "id",
+    "source",
+    "presentationOptions",
+    "isBackground"
 ];
 
 /**
