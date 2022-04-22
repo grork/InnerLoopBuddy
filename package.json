@@ -40,27 +40,17 @@
             {
                 "command": "codevoid.inner-loop-buddy.openDefaultUrl",
                 "title": "Open Default URL",
-                "category": "Inner Loop Buddy"
+                "category": "Inner Loop Buddy",
+                "enablement": "workbenchState != 'empty'"
                 
             },
             {
                 "command": "codevoid.inner-loop-buddy.printTaskCriteriaJson",
                 "title": "Print Task configuration as matching criteria configuration",
-                "category": "Inner Loop Buddy"
+                "category": "Inner Loop Buddy",
+                "enablement": "workbenchState != 'empty'"
             }
         ],
-        "menus": {
-            "commandPalette": [
-                {
-                    "command": "codevoid.inner-loop-buddy.openDefaultUrl",
-                    "when": "workbenchState != 'empty'"
-                },
-                {
-                    "command": "codevoid.inner-loop-buddy.printTaskCriteriaJson",
-                    "when": "workbenchState != 'empty'"
-                }
-            ]
-        },
         "configuration": [
             {
                 "title": "Inner Loop Buddy",
