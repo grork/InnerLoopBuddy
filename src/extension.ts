@@ -373,7 +373,10 @@ export class InnerLoopBuddyExtension {
         });
 
         // Show it, and wait for the user to pick something for us to operate on
-        const pickedItem = await vscode.window.showQuickPick(pickerItems);
+        const pickedItem = await vscode.window.showQuickPick(pickerItems, {
+            title: "Which task would you like to print match criteria for?"
+        });
+        
         if (!pickedItem) {
             // They didn't pick anything, so we don't need to do anything
             return;
