@@ -217,6 +217,34 @@ function sortTasksByScopeThenSourceThenName(a: vscode.Task, b: vscode.Task): num
     return (a.name.localeCompare(b.name));
 }
 
+async function getGroupedQuickPickItemsForTasks(): Promise<[(vscode.QuickPickItem & { task?: vscode.Task })[], vscode.Task[]]> {
+    let tasks = (await vscode.tasks.fetchTasks()).sort(sortTasksByScopeThenSourceThenName);
+    const createdGroups = new Set<string>();
+
+    const pickerItems = tasks.reduce((p: (vscode.QuickPickItem & { task?: vscode.Task })[], t: vscode.Task) => {
+        const group = scopeToName(t.scope);
+        if (!createdGroups.has(group)) {
+            // Add seperator
+            p.push({
+                kind: vscode.QuickPickItemKind.Separator,
+                label: group
+            });
+            createdGroups.add(group);
+        }
+
+        p.push({
+            label: t.name,
+            detail: t.detail,
+            description: t.source,
+            task: t
+        })
+
+        return p;
+    }, []);
+
+    return [pickerItems, tasks];
+}
+
 /**
  * Extension instance that manages the lifecycle of an extension in vscode.
  */
@@ -330,30 +358,7 @@ export class InnerLoopBuddyExtension {
      * @returns Promise that completes when the task is, uh, complete
      */
     async printTaskCriteriaToChannel(): Promise<void> {
-        let tasks = (await vscode.tasks.fetchTasks()).sort(sortTasksByScopeThenSourceThenName);
-        const createdGroups = new Set<string>();
-
-        const pickerItems =
-            tasks.reduce((p: (vscode.QuickPickItem & { task?: vscode.Task })[], t: vscode.Task) => {
-                const group = scopeToName(t.scope);
-                if (!createdGroups.has(group)) {
-                    // Add seperator
-                    p.push({
-                        kind: vscode.QuickPickItemKind.Separator,
-                        label: group
-                    });
-                    createdGroups.add(group);
-                }
-
-                p.push({
-                    label: t.name,
-                    detail: t.detail,
-                    description: group,
-                    task: t
-                })
-
-                return p;
-            }, []);
+        let [pickerItems, tasks] = await getGroupedQuickPickItemsForTasks();
 
         // Place an item for 'all' at the end. This doesn't contain a task,
         // which will be used to distinguished from real task items
