@@ -131,14 +131,35 @@ function getConfigurationScopeFromActiveEditor(probeSetting: string): Thenable<M
 
 /**
  * Convience function to convert from task scope into a ConfigurationScope (Which
- * is basically undefined or a workspace folder)
+ * is basically undefined or a workspace folder). However, there is a little
+ * magic included.
+ * 
+ * Tasks & Configuration can be set on multiple levels: User (global),
+ * Workspace, Folder. At each of these levels, you can also configure settings
+ * for this extension -- but those might be divorced from the tasks themselves.
+ * 
+ * When the task itself executes, it's scope reflects it's source. When the task
+ * is in a folder, this works out nicely because configuration in VS Code will
+ * look to it's parent 'container'. However, this doesn't apply in reverse. A
+ * task thats defined at the user level, in a multiroot workspace, you don't know
+ * where to resolve configuration from -- folder? Which one? In the rare
+ * workspace-but-single-folder scenario, you can just pick the single
+ * Workspace folder.
+ * 
+ * But otherwise we're kinda SOL. We can guess by using the active editor, which
+ * if it's not got configuration will still roll up to the parent level of
+ * configuration.
  */
-function configurationScopeFromTaskScope(taskScope: monitor.ActualTaskScope): Maybe<vscode.ConfigurationScope> {
+export function configurationScopeFromTaskScope(taskScope: monitor.ActualTaskScope): Maybe<vscode.ConfigurationScope> {
     if (monitor.isWorkspaceTaskScope(taskScope)) {
         return <vscode.WorkspaceFolder>taskScope;
     }
 
-    return undefined;
+    if (vscode.workspace.workspaceFolders?.length === 1) {
+        return vscode.workspace.workspaceFolders![0];
+    }
+
+    return vscode.window.activeTextEditor?.document.uri;
 }
 
 /**

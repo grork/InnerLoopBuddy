@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as ext from "./extension";
-import type { Maybe } from "./extension";
+import { Maybe, configurationScopeFromTaskScope } from "./extension";
 import * as _ from "lodash";
 
 export const MONITORED_TASKS_SETTING_SECTION = "monitoredTasks";
@@ -106,10 +106,10 @@ export function isWorkspaceTaskScope(taskScope: ActualTaskScope): boolean {
  * 
  * @param scope The scope for which to resolve the configuration
  */
-function getMonitoringConfigurationForTaskScope(scope: ActualTaskScope): { criteria: TaskCriteria[], mode: MonitoringMode } {
+function resolveMonitoringConfigurationForTaskScope(scope: ActualTaskScope): { criteria: TaskCriteria[], mode: MonitoringMode } {
     // Get the global/workspace configuration. 
     const criteria: TaskCriteria[] = vscode.workspace.getConfiguration(ext.EXTENSION_ID).get(MONITORED_TASKS_SETTING_SECTION, []);
-    const resolvingScope = (isWorkspaceTaskScope(scope) ? <vscode.WorkspaceFolder>scope : undefined);
+    const resolvingScope = configurationScopeFromTaskScope(scope);
 
     // If it's been obtained from a specific workspace folder, lets use that.
     // Ultimately configuration will resolve
@@ -159,7 +159,7 @@ export class TaskMonitor {
      * @param configurationResolver Called to resolve the configuration for the
      *        executing task
      */
-    constructor(private configurationResolver: TaskMonitoringConfigurationResolver = getMonitoringConfigurationForTaskScope) {
+    constructor(private configurationResolver: TaskMonitoringConfigurationResolver = resolveMonitoringConfigurationForTaskScope) {
         vscode.tasks.onDidStartTask(this.handleTaskStarting, this, this.subscriptions);
         const runningTask = this.isMatchingTaskRunning();
         if (runningTask) {
