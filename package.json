@@ -42,7 +42,6 @@
                 "title": "Open Default URL",
                 "category": "Inner Loop Buddy",
                 "enablement": "workbenchState != 'empty'"
-                
             },
             {
                 "command": "codevoid.inner-loop-buddy.startCriteriaWizard",
@@ -100,7 +99,7 @@
                         "type": "string",
                         "scope": "resource",
                         "default": "matching",
-                        "enum":[
+                        "enum": [
                             "matching",
                             "all"
                         ],
@@ -154,10 +153,10 @@
         "@vscode/test-electron": "^2.1.3",
         "glob": "^7.2.0",
         "mocha": "^9.2.2",
+        "node-fetch": "^3.2.3",
         "typescript": "^4.5.5"
     },
     "dependencies": {
-        "lodash": "^4.17.21",
-        "node-fetch": "^2.6.7"
+        "lodash": "^4.17.21"
     }
 }
