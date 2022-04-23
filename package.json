@@ -45,6 +45,12 @@
                 
             },
             {
+                "command": "codevoid.inner-loop-buddy.startCriteriaWizard",
+                "title": "Add configuration to match tasks",
+                "category": "Inner Loop Buddy",
+                "enablement": "workbenchState != 'empty'"
+            },
+            {
                 "command": "codevoid.inner-loop-buddy.printTaskCriteriaJson",
                 "title": "Print Task configuration as matching criteria configuration",
                 "category": "Inner Loop Buddy",

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as _ from "lodash";
 import * as monitor from "./taskmonitor";
 
 export const EXTENSION_ID = "codevoid.inner-loop-buddy";
@@ -7,6 +8,7 @@ export const DEFAULT_URL_SETTING_SECTION = "defaultUrl"
 export const MATCHED_TASK_BEHAVIOUR_SETTING_SECTION = "matchedTaskBehavior";
 export const OPEN_BROWSER_COMMAND_ID = `${EXTENSION_ID}.openDefaultUrl`;
 export const PRINT_TASK_CRITERIA_COMMAND_ID = `${EXTENSION_ID}.printTaskCriteriaJson`;
+export const START_CONFIGURE_TASK_CRITERIA_WIZARD_COMMAND_ID = `${EXTENSION_ID}.startCriteriaWizard`;
 
 const AUTO_OPEN_DELAY_SETTING_SECTION = "autoOpenDelay";
 const EDITOR_COLUMN_SETTING_SECTION = "editorColumn";
@@ -355,7 +357,6 @@ export class InnerLoopBuddyExtension {
      * Prompt the user for a task to output criteria for, and then print to a
      * dedicated output channel if one is selected. Adds an 'All' item to
      * output all criteria
-     * @returns Promise that completes when the task is, uh, complete
      */
     async printTaskCriteriaToChannel(): Promise<void> {
         let [pickerItems, tasks] = await getGroupedQuickPickItemsForTasks();
@@ -376,7 +377,7 @@ export class InnerLoopBuddyExtension {
         const pickedItem = await vscode.window.showQuickPick(pickerItems, {
             title: "Which task would you like to print match criteria for?"
         });
-        
+
         if (!pickedItem) {
             // They didn't pick anything, so we don't need to do anything
             return;
@@ -396,6 +397,73 @@ export class InnerLoopBuddyExtension {
         this.criteriaOutput.append(JSON.stringify(criteria, null, 4));
         this.criteriaOutput.show();
     }
+
+    /**
+     * Start a flow that walks the user through selecting a task they which to
+     * monitor. Once they've selected it, based on their project will either add
+     * it to the folder, or if they're in a code-workspace, prompt for the
+     * location to add the configuration to.
+     */
+    async startTaskCriteriaWizard(): Promise<void> {
+        const [taskPickerItems, ] = await getGroupedQuickPickItemsForTasks();
+
+        const pickedTask = await vscode.window.showQuickPick(taskPickerItems, {
+            title: "Which task would you like configuration to be added for?"
+        });
+
+        // Nothing was picked, nothing to process
+        if (!pickedTask) {
+            return;
+        }
+
+        let configurationScope = configurationScopeFromTaskScope(pickedTask.task!.scope);
+        if (vscode.workspace.workspaceFile) {
+            // If we have a workspace *file*, it means we have at least two
+            // possible targets for our configuration. We need to ask the user
+            // to make that choice for us.
+
+            // Get the folders
+            const configurationTargetPicks: (vscode.QuickPickItem & { folder?: vscode.WorkspaceFolder})[] = vscode.workspace.workspaceFolders!.map((wf) => {
+                return {
+                    label: wf.name,
+                    folder: wf
+                }
+            });
+            
+            // Add a fixed workspace folder item
+            configurationTargetPicks.push({
+                label: "Workspace File"
+            });
+
+            const pickedTarget = await vscode.window.showQuickPick(configurationTargetPicks, {
+                title: "Which folder should the configuration be added to?"
+            });
+
+            // No target picked, give up
+            if (!pickedTarget) {
+                return;
+            }
+
+            configurationScope = pickedTarget.folder;
+        }
+
+        // We need to determine where, what, and if, we should att configuration
+        const configurationTarget = (configurationScope ? vscode.ConfigurationTarget.WorkspaceFolder : vscode.ConfigurationTarget.Workspace);
+        const criteriaToAdd = monitor.fromTaskToCriteria(pickedTask.task!);
+        const configuration = vscode.workspace.getConfiguration(EXTENSION_ID, configurationScope);
+        const existingCritera = <monitor.TaskCriteria[]>configuration.get(monitor.MONITORED_TASKS_SETTING_SECTION);
+
+        // Don't add it & cause a duplicate if the item already exists
+        const criteriaAlreadyExists = existingCritera.some((t) => _.isMatch(criteriaToAdd, t));
+        if (!criteriaAlreadyExists) {
+            existingCritera.push(criteriaToAdd);
+            configuration.update(monitor.MONITORED_TASKS_SETTING_SECTION, existingCritera, configurationTarget);
+        }
+
+        await vscode.window.showInformationMessage("Configuration added!", {
+            detail: "The configuration has been added to your workspace folder settings"
+        });
+    }
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -403,6 +471,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION))));
     context.subscriptions.push(vscode.commands.registerCommand(PRINT_TASK_CRITERIA_COMMAND_ID, instance.printTaskCriteriaToChannel, instance));
+    context.subscriptions.push(vscode.commands.registerCommand(START_CONFIGURE_TASK_CRITERIA_WIZARD_COMMAND_ID, instance.startTaskCriteriaWizard, instance));
 
     return instance;
 }
