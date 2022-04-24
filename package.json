@@ -11,6 +11,7 @@
         "url": "https://github.com/grork/InnerLoopBuddy/issues/"
     },
     "homepage": "https://github.com/grork/InnerLoopBuddy/README.md",
+    "icon": "assets/package_icon.png",
     "version": "0.0.1",
     "extensionKind": [
         "ui"
