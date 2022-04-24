@@ -1,7 +1,9 @@
 *
 */**
 **/.DS_Store
+!node_modules/lodash
 !package.json
 !README.md
 !LICENSE.txt
 !out/extension.js
+!out/taskmonitor.js
