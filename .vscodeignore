@@ -4,6 +4,7 @@
 !node_modules/lodash
 !package.json
 !README.md
+!CHANGELOG.md
 !LICENSE.txt
 !out/extension.js
 !out/taskmonitor.js
