@@ -348,7 +348,9 @@ export class InnerLoopBuddyExtension {
             await delay(autoOpenDelay);
         }
 
-        await vscode.commands.executeCommand("simpleBrowser.api.open", vscode.Uri.parse(defaultBrowserUrl), { viewColumn: apiViewColumn });
+        const url = vscode.Uri.parse(defaultBrowserUrl).toString(true)
+
+        await vscode.commands.executeCommand("simpleBrowser.api.open", url, { viewColumn: apiViewColumn });
         
         return true;
     }
