@@ -1,10 +1,10 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import fetch from "node-fetch";
+import * as http from 'http';
 
 import * as impl from "../../extension";
 import * as monitor from "../../taskmonitor";
-import _ = require("lodash");
+import * as _ from "lodash"
 
 const SERVE_TASK_TYPE = "npm";
 const SERVE_TASK_SCRIPT = "serve";
@@ -33,6 +33,35 @@ const ALT_ECHO_TASK_CRITERIA = {
     "execution": {
         "commandLine": "echo Test2 && exit 98"
     }
+}
+
+// `fetch`-like simple helper. Can't use node-fetch because of
+// https://github.com/microsoft/vscode/issues/130367, which causes the tests to
+// fail to even load. This is a total 'just enough to run the test', and not
+// a meaninginful implementation.
+function fetch(url: string): Promise<{ json: () => any}> {
+    return new Promise<{ json: () => any }>((resolve, reject) => {
+        const req = http.get(url, (response: http.IncomingMessage) => {
+            if (response.statusCode != 200) {
+                reject(response.statusCode);
+                response.resume(); // make sure the processing continues.
+                return;
+            }
+
+            response.setEncoding("utf-8");
+
+            // Data collects the chunks of data as they are returned. You need
+            // to wait for "end" before resolving the promise
+            let body: string = "";
+            response.on("data", (data) => body += data);
+
+            response.on("end", () => resolve({ json: () => Promise.resolve(JSON.parse(body)) }));
+        }).on("error", (e) => {
+            reject(e);
+        });
+
+        req.end();
+    });
 }
 
 /**
@@ -145,6 +174,7 @@ async function testSiteIsAvailable(fileToRetreive: string = "test.json"): Promis
     for (let i = 0; i < 5000; i += DELAY_INCREMENT) {
         try {
             testData = <any>await (await fetch(`http://localhost:3000/${fileToRetreive}`)).json();
+            break;
         } catch {
             await delay(DELAY_INCREMENT); // Wait for the service to actually startup
         }
