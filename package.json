@@ -1,164 +1,169 @@
 {
-    "name": "inner-loop-buddy",
-    "publisher": "codevoid",
-    "displayName": "Inner Loop Buddy",
-    "description": "Open a simple browser to a preconfigured URL on demand, or startup",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/grork/InnerLoopBuddy"
-    },
-    "bugs": {
-        "url": "https://github.com/grork/InnerLoopBuddy/issues/"
-    },
-    "homepage": "https://github.com/grork/InnerLoopBuddy/README.md",
-    "icon": "assets/package_icon.png",
-    "version": "1.0.1",
-    "extensionKind": [
-        "ui"
-    ],
-    "capabilities": {
-        "untrustedWorkspaces": {
-            "supported": true
-        }
-    },
-    "engines": {
-        "vscode": "^1.66.0"
-    },
-    "categories": [
-        "Other"
-    ],
-    "keywords": [
-        "browser",
-        "preview"
-    ],
-    "activationEvents": [
-        "onCommand:inner-loop-buddy.openDefaultUrl",
-        "onStartupFinished"
-    ],
-    "main": "./out/extension.js",
-    "contributes": {
-        "commands": [
-            {
-                "command": "codevoid.inner-loop-buddy.openDefaultUrl",
-                "title": "Open Default URL",
-                "category": "Inner Loop Buddy",
-                "enablement": "workbenchState != 'empty'"
-            },
-            {
-                "command": "codevoid.inner-loop-buddy.startCriteriaWizard",
-                "title": "Add configuration to match tasks",
-                "category": "Inner Loop Buddy",
-                "enablement": "workbenchState != 'empty'"
-            },
-            {
-                "command": "codevoid.inner-loop-buddy.printTaskCriteriaJson",
-                "title": "Print Task configuration as matching criteria configuration",
-                "category": "Inner Loop Buddy",
-                "enablement": "workbenchState != 'empty'"
-            }
-        ],
-        "configuration": [
-            {
-                "title": "Inner Loop Buddy",
-                "properties": {
-                    "codevoid.inner-loop-buddy.defaultUrl": {
-                        "description": "URL to open the browser for",
-                        "type": "string",
-                        "default": null,
-                        "scope": "resource"
-                    },
-                    "codevoid.inner-loop-buddy.autoOpenDelay": {
-                        "description": "Delay (in ms) before opening the browser. Opening the browser may be dependent on the server completing initialization. By setting this value to non-zero, the delay of opening the browser can be configured till after that initialization",
-                        "type": "number",
-                        "scope": "resource",
-                        "default": 0
-                    },
-                    "codevoid.inner-loop-buddy.editorColumn": {
-                        "markdownDescription": "Editor column for the browser tab to open in. See the [VS Code Documenation](https://code.visualstudio.com/api/references/vscode-api#ViewColumn) for more details on the behaviour",
-                        "type": "string",
-                        "default": "Beside",
-                        "scope": "resource",
-                        "enum": [
-                            "Active",
-                            "Beside",
-                            "One",
-                            "Two",
-                            "Three",
-                            "Four",
-                            "Five",
-                            "Six",
-                            "Seven",
-                            "Eight",
-                            "Nine"
-                        ],
-                        "enumDescriptions": [
-                            "Same editor column as the active editor",
-                            "In a new column beside the active editor"
-                        ]
-                    },
-                    "codevoid.inner-loop-buddy.taskMonitoringMode": {
-                        "type": "string",
-                        "scope": "resource",
-                        "default": "matching",
-                        "enum": [
-                            "matching",
-                            "all"
-                        ],
-                        "enumDescriptions": [
-                            "Only task that match the configured criteria",
-                            "All tasks that are executed"
-                        ]
-                    },
-                    "codevoid.inner-loop-buddy.monitoredTasks": {
-                        "markdownDescription": "The criteria used to determine if a browser tab should be opened. See [documentation](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
-                        "type": "array",
-                        "scope": "resource",
-                        "items": {
-                            "type": "object"
-                        }
-                    },
-                    "codevoid.inner-loop-buddy.matchedTaskBehavior": {
-                        "markdownDescription": "When a matching task is executed, how should we handle different task executions. See [documentation](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
-                        "type": "string",
-                        "default": "onetime",
-                        "scope": "resource",
-                        "enum": [
-                            "none",
-                            "onetime",
-                            "everytime"
-                        ],
-                        "enumDescriptions": [
-                            "Don't open a browser tab when a matched task is executed",
-                            "Open at most once per session",
-                            "Open every time a matching task is started"
-                        ]
-                    }
-                }
-            }
-        ]
-    },
-    "scripts": {
-        "vscode:prepublish": "npm run compile",
-        "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./",
-        "pretest": "npm run compile",
-        "test": "node ./out/test/runTest.js"
-    },
-    "devDependencies": {
-        "@types/glob": "^7.2.0",
-        "@types/lodash": "^4.14.181",
-        "@types/mocha": "^9.1.0",
-        "@types/node": "14.x",
-        "@types/node-fetch": "^2.6.1",
-        "@types/vscode": "^1.66.0",
-        "@vscode/test-electron": "^2.1.3",
-        "glob": "^7.2.0",
-        "mocha": "^9.2.2",
-        "node-fetch": "^3.2.3",
-        "typescript": "^4.5.5",
-        "vsce": "^2.8.0"
-    },
-    "dependencies": {
-        "lodash": "^4.17.21"
-    }
+	"name": "inner-loop-buddy",
+	"publisher": "codevoid",
+	"displayName": "Inner Loop Buddy",
+	"description": "Open a simple browser to a preconfigured URL on demand, or startup",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/grork/InnerLoopBuddy"
+	},
+	"bugs": {
+		"url": "https://github.com/grork/InnerLoopBuddy/issues/"
+	},
+	"homepage": "https://github.com/grork/InnerLoopBuddy/README.md",
+	"icon": "assets/package_icon.png",
+	"version": "1.0.1",
+	"extensionKind": [
+		"ui"
+	],
+	"capabilities": {
+		"untrustedWorkspaces": {
+			"supported": true
+		}
+	},
+	"engines": {
+		"vscode": "^1.66.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"keywords": [
+		"browser",
+		"preview"
+	],
+	"activationEvents": [
+		"onCommand:inner-loop-buddy.openDefaultUrl",
+		"onStartupFinished"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "codevoid.inner-loop-buddy.openDefaultUrl",
+				"title": "Open Default URL",
+				"category": "Inner Loop Buddy",
+				"enablement": "workbenchState != 'empty'"
+			},
+			{
+				"command": "codevoid.inner-loop-buddy.startCriteriaWizard",
+				"title": "Add configuration to match tasks",
+				"category": "Inner Loop Buddy",
+				"enablement": "workbenchState != 'empty'"
+			},
+			{
+				"command": "codevoid.inner-loop-buddy.printTaskCriteriaJson",
+				"title": "Print Task configuration as matching criteria configuration",
+				"category": "Inner Loop Buddy",
+				"enablement": "workbenchState != 'empty'"
+			}
+		],
+		"configuration": [
+			{
+				"title": "Inner Loop Buddy",
+				"properties": {
+					"codevoid.inner-loop-buddy.defaultUrl": {
+						"description": "URL to open the browser for",
+						"type": "string",
+						"default": null,
+						"scope": "resource"
+					},
+					"codevoid.inner-loop-buddy.autoOpenDelay": {
+						"description": "Delay (in ms) before opening the browser. Opening the browser may be dependent on the server completing initialization. By setting this value to non-zero, the delay of opening the browser can be configured till after that initialization",
+						"type": "number",
+						"scope": "resource",
+						"default": 0
+					},
+					"codevoid.inner-loop-buddy.editorColumn": {
+						"markdownDescription": "Editor column for the browser tab to open in. See the [VS Code Documenation](https://code.visualstudio.com/api/references/vscode-api#ViewColumn) for more details on the behaviour",
+						"type": "string",
+						"default": "Beside",
+						"scope": "resource",
+						"enum": [
+							"Active",
+							"Beside",
+							"One",
+							"Two",
+							"Three",
+							"Four",
+							"Five",
+							"Six",
+							"Seven",
+							"Eight",
+							"Nine"
+						],
+						"enumDescriptions": [
+							"Same editor column as the active editor",
+							"In a new column beside the active editor"
+						]
+					},
+					"codevoid.inner-loop-buddy.taskMonitoringMode": {
+						"type": "string",
+						"scope": "resource",
+						"default": "matching",
+						"enum": [
+							"matching",
+							"all"
+						],
+						"enumDescriptions": [
+							"Only task that match the configured criteria",
+							"All tasks that are executed"
+						]
+					},
+					"codevoid.inner-loop-buddy.monitoredTasks": {
+						"markdownDescription": "The criteria used to determine if a browser tab should be opened. See [documentation](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
+						"type": "array",
+						"scope": "resource",
+						"items": {
+							"type": "object"
+						}
+					},
+					"codevoid.inner-loop-buddy.matchedTaskBehavior": {
+						"markdownDescription": "When a matching task is executed, how should we handle different task executions. See [documentation](https://github.com/grork/InnerLoopBuddy#extension-settings) for details",
+						"type": "string",
+						"default": "onetime",
+						"scope": "resource",
+						"enum": [
+							"none",
+							"onetime",
+							"everytime"
+						],
+						"enumDescriptions": [
+							"Don't open a browser tab when a matched task is executed",
+							"Open at most once per session",
+							"Open every time a matching task is started"
+						]
+					}
+				}
+			}
+		]
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./",
+		"pretest": "npm run compile",
+		"test": "node ./out/test/runTest.js"
+	},
+	"devDependencies": {
+		"@types/glob": "^7.2.0",
+		"@types/lodash": "^4.14.182",
+		"@types/mocha": "^9.1.1",
+		"@types/node": "18.x",
+		"@types/vscode": "^1.69.0",
+		"@vscode/test-electron": "^2.1.5",
+		"glob": "^8.0.3",
+		"mocha": "^10.0.0",
+		"typescript": "^4.7.4",
+		"vsce": "^2.10.0",
+		"npm-check-updates": "^15.3.4"
+	},
+	"dependencies": {
+		"lodash": "^4.17.21"
+	},
+	"__metadata": {
+		"id": "cef35ff5-36de-4735-9d1f-d51f863ce076",
+		"publisherDisplayName": "Codevoid",
+		"publisherId": "8069b2fc-2009-4f2f-b611-ac32dd314e5b",
+		"isPreReleaseVersion": false
+	}
 }
