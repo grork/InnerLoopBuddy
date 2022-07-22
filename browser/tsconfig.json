@@ -1,0 +1,13 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "../out/browser",
+        "lib": [
+            "DOM"
+        ],
+        "rootDir": "./"
+    },
+    "include":[
+        "./"
+    ]
+}

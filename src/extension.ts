@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as _ from "lodash";
 import * as monitor from "./taskmonitor";
+import { BrowserManager } from "./browserManager";
 
 export const EXTENSION_ID = "codevoid.inner-loop-buddy";
 
@@ -254,8 +255,13 @@ export class InnerLoopBuddyExtension {
     private _isInitialized: boolean = false;
     private taskMonitor?: monitor.TaskMonitor;
     private criteriaOutput?: vscode.OutputChannel;
+    private browserManager: BrowserManager;
 
     constructor(private context: vscode.ExtensionContext) {
+        this.browserManager = new BrowserManager(context.extensionUri);
+        this.browserManager.handleExtensionActivation(context);
+        context.subscriptions.push(this.browserManager);
+
         // Check if we're in a test
         if (SKIP_EXTENSION_INIT) {
             return;
@@ -350,7 +356,7 @@ export class InnerLoopBuddyExtension {
 
         const url = vscode.Uri.parse(defaultBrowserUrl).toString(true)
 
-        await vscode.commands.executeCommand("simpleBrowser.api.open", url, { viewColumn: apiViewColumn });
+        this.browserManager.show(url, { viewColumn: apiViewColumn })
         
         return true;
     }
