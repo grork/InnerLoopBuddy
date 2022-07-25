@@ -17,12 +17,11 @@ export class BrowserManager {
     public show(url: string, options?: ShowOptions): void {
         if (this._activeView) {
             this._activeView.show(url, options);
-        } else {
-            const view = BrowserView.create(this.extensionUri, url, options);
-            this.registerWebviewListeners(view);
-
-            this._activeView = view;
+            return;
         }
+
+        const view = BrowserView.create(this.extensionUri, url, options);
+        this.registerWebviewListeners(view);
     }
 
     public restore(panel: vscode.WebviewPanel, state: any): void {
@@ -38,16 +37,13 @@ export class BrowserManager {
                 this._activeView = undefined;
             }
         });
+
+        this._activeView = view;
     }
     
     public handleExtensionActivation(context: vscode.ExtensionContext) {
-        const manager = new BrowserManager(context.extensionUri);
-        context.subscriptions.push(manager);
-    
         context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(BrowserView.viewType, {
-            deserializeWebviewPanel: async (panel, state) => {
-                manager.restore(panel, state);
-            }
+            deserializeWebviewPanel: async (panel, state) => this.restore(panel, state)
         }));
     }
 }
