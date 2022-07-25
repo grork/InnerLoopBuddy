@@ -1,7 +1,7 @@
 const vscode = acquireVsCodeApi();
 
 function getSettings() {
-	const element = document.getElementById("simple-browser-settings");
+	const element = document.getElementById("browser-settings");
 	if (element) {
 		const data = element.getAttribute("data-settings");
 		if (data) {

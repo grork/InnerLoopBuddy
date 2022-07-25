@@ -149,7 +149,7 @@ function keyFromScope(scope: ActualTaskScope): string {
  * after instantiation
  */
 export class TaskMonitor {
-    private subscriptions: { dispose(): any }[] = [];
+    private subscriptions: vscode.Disposable[] = [];
     private matchingTaskExecutedEmitter = new vscode.EventEmitter<MatchedExecutionOccured>();
     private scopedOccurances = new Map<string, number>();
 

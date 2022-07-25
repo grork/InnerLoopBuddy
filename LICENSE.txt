@@ -22,7 +22,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 The files:
 src/browserManager.ts (originally simpleBrowserManager.ts)
 src/browserView.ts (originally simpleBrowserView.ts)
-src/disposable.ts
 browser/browserUi.ts (originally index.ts)
 browser/styles.css (originally main.css)
 

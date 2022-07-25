@@ -1,99 +1,102 @@
 import * as vscode from "vscode";
-import { Disposable } from "./disposable";
+import { EXTENSION_ID } from "./extension";
 
 export interface ShowOptions {
     readonly preserveFocus?: boolean;
     readonly viewColumn?: vscode.ViewColumn;
 }
 
-export class BrowserView extends Disposable {
+enum FromWebViewMessageType {
+    OpenInSystemBrowser = "open-in-system-browser"
+}
 
-    public static readonly viewType = "codevoid.inner-loop-buddy.browser.view";
-    private static readonly title = "Inner Loop Buddy Browser";
+enum ToWebViewMessageType {
+    FocusIndicatorLockEnabledStateChanged = "didChangeFocusLockIndicatorEnabled"
+}
 
-    private readonly _webviewPanel: vscode.WebviewPanel;
+const BROWSER_TITLE: string = "Inner Loop Buddy Browser";
+const FOCUS_LOCK_SETTING_SECTION = "focusLockIndicator.enabled";
 
-    private readonly _onDidDispose = this._register(new vscode.EventEmitter<void>());
+export const BROWSER_VIEW_TYPE = `${EXTENSION_ID}.browser.view`;
+
+export class BrowserView {
+    private disposables: vscode.Disposable[] = [];
+    private readonly _onDidDispose = new vscode.EventEmitter<void>();
     public readonly onDispose = this._onDidDispose.event;
 
     public static create(
         extensionUri: vscode.Uri,
-        url: string,
-        showOptions?: ShowOptions
+        targetUrl: string,
+        showOptions?: ShowOptions,
+        targetWebView?: vscode.WebviewPanel
     ): BrowserView {
-        const webview = vscode.window.createWebviewPanel(BrowserView.viewType, BrowserView.title, {
-            viewColumn: showOptions?.viewColumn ?? vscode.ViewColumn.Active,
-            preserveFocus: showOptions?.preserveFocus
-        }, {
-            enableScripts: true,
-            enableForms: true,
-            retainContextWhenHidden: true,
-            localResourceRoots: [
-                vscode.Uri.joinPath(extensionUri, "out/browser")
-            ]
-        });
-        return new BrowserView(extensionUri, url, webview);
-    }
+        if (!targetWebView) {
+            targetWebView = vscode.window.createWebviewPanel(
+                BROWSER_VIEW_TYPE,
+                BROWSER_TITLE, {
+                viewColumn: showOptions?.viewColumn ?? vscode.ViewColumn.Active,
+                preserveFocus: showOptions?.preserveFocus
+            }, {
+                enableScripts: true,
+                enableForms: true,
+                retainContextWhenHidden: true,
+                localResourceRoots: [
+                    vscode.Uri.joinPath(extensionUri, "out/browser")
+                ]
+            }
+            );
+        }
 
-    public static restore(
-        extensionUri: vscode.Uri,
-        url: string,
-        webview: vscode.WebviewPanel,
-    ): BrowserView {
-        return new BrowserView(extensionUri, url, webview);
+        return new BrowserView(extensionUri, targetUrl, targetWebView);
     }
 
     private constructor(
         private readonly extensionUri: vscode.Uri,
         url: string,
-        webviewPanel: vscode.WebviewPanel,
+        private webViewPanel: vscode.WebviewPanel,
     ) {
-        super();
+        this.disposables.push(this._onDidDispose);
+        this.disposables.push(webViewPanel);
 
-        this._webviewPanel = this._register(webviewPanel);
-
-        this._register(this._webviewPanel.webview.onDidReceiveMessage(e => {
-            switch (e.type) {
-                case "openExternal":
-                    try {
-                        const url = vscode.Uri.parse(e.url);
-                        vscode.env.openExternal(url);
-                    } catch {
-                        // Noop
-                    }
-                    break;
-            }
-        }));
-
-        this._register(this._webviewPanel.onDidDispose(() => {
-            this.dispose();
-        }));
-
-        this._register(vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration("codevoid.inner-loop-buddy.focusLockIndicator.enabled")) {
-                const configuration = vscode.workspace.getConfiguration("codevoid.inner-loop-buddy");
-                this._webviewPanel.webview.postMessage({
-                    type: "didChangeFocusLockIndicatorEnabled",
-                    focusLockEnabled: configuration.get<boolean>("focusLockIndicator.enabled", true)
-                });
-            }
-        }));
+        vscode.workspace.onDidChangeConfiguration(this.handleConfigurationChanged, this, this.disposables);
+        this.webViewPanel.webview.onDidReceiveMessage(this.handleWebViewMessage, this, this.disposables);
+        this.webViewPanel.onDidDispose(this.dispose, this, this.disposables);
 
         this.show(url);
     }
 
-    public override dispose() {
-        this._onDidDispose.fire();
-        super.dispose();
+    private handleWebViewMessage(payload: { type: FromWebViewMessageType, url: string }) {
+        switch (payload.type) {
+            case FromWebViewMessageType.OpenInSystemBrowser:
+                try {
+                    const url = vscode.Uri.parse(payload.url);
+                    vscode.env.openExternal(url);
+                } catch {
+                    // Noop
+                }
+                break;
+            
+            default:
+                debugger;
+                break;
+        }
     }
 
-    public show(url: string, options?: ShowOptions) {
-        this._webviewPanel.webview.html = this.getHtml(url);
-        this._webviewPanel.reveal(options?.viewColumn, options?.preserveFocus);
+    private handleConfigurationChanged(e: vscode.ConfigurationChangeEvent) {
+        if (!e.affectsConfiguration(`${EXTENSION_ID}.${FOCUS_LOCK_SETTING_SECTION}`)) {
+            // Not of interest to us
+            return;
+        }
+
+        const configuration = vscode.workspace.getConfiguration(EXTENSION_ID);
+        this.webViewPanel.webview.postMessage({
+            type: ToWebViewMessageType,
+            focusLockEnabled: configuration.get<boolean>(FOCUS_LOCK_SETTING_SECTION, true)
+        });
     }
 
     private getHtml(url: string) {
-        const configuration = vscode.workspace.getConfiguration("codevoid.inner-loop-buddy");
+        const configuration = vscode.workspace.getConfiguration(EXTENSION_ID);
 
         const nonce = getNonce();
 
@@ -107,15 +110,15 @@ export class BrowserView extends Disposable {
 
                 <meta http-equiv="Content-Security-Policy" content="
                     default-src 'none';
-                    font-src ${this._webviewPanel.webview.cspSource};
-                    style-src ${this._webviewPanel.webview.cspSource};
+                    font-src ${this.webViewPanel.webview.cspSource};
+                    style-src ${this.webViewPanel.webview.cspSource};
                     script-src 'nonce-${nonce}';
                     frame-src *;
                     ">
 
-                <meta id="simple-browser-settings" data-settings="${escapeAttribute(JSON.stringify({
+                <meta id="browser-settings" data-settings="${escapeAttribute(JSON.stringify({
             url: url,
-            focusLockEnabled: configuration.get<boolean>("focusLockIndicator.enabled", true)
+            focusLockEnabled: configuration.get<boolean>(FOCUS_LOCK_SETTING_SECTION, true)
         }))}">
 
                 <link rel="stylesheet" type="text/css" href="${mainCss}">
@@ -145,7 +148,7 @@ export class BrowserView extends Disposable {
                     </nav>
                 </header>
                 <div class="content">
-                    <div class="iframe-focused-alert">Focus Lock"</div>
+                    <div class="iframe-focused-alert">Focus Lock</div>
                     <iframe sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
                 </div>
 
@@ -155,7 +158,19 @@ export class BrowserView extends Disposable {
     }
 
     private extensionResourceUrl(...parts: string[]): vscode.Uri {
-        return this._webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, ...parts));
+        return this.webViewPanel.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, ...parts));
+    }
+
+    public dispose() {
+        this._onDidDispose.fire();
+        
+        vscode.Disposable.from(...this.disposables).dispose();
+        this.disposables = [];
+    }
+
+    public show(url: string, options?: ShowOptions) {
+        this.webViewPanel.webview.html = this.getHtml(url);
+        this.webViewPanel.reveal(options?.viewColumn, options?.preserveFocus);
     }
 }
 

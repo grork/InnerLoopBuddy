@@ -149,7 +149,8 @@
 		"compile": "npm run compile-extension && npm run compile-browser",
 		"compile-extension": "tsc -p ./",
 		"compile-browser": "tsc -p ./browser && node browser/copy-browser-deps.mjs",
-		"watch": "tsc -watch -p ./",
+		"watch-extension": "tsc -watch -p ./",
+		"watch-browser": "tsc -watch -p ./browser",
 		"pretest": "npm run compile",
 		"test": "node ./out/test/runTest.js"
 	},

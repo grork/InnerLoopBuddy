@@ -1,5 +1,9 @@
 import * as vscode from "vscode";
-import { ShowOptions, BrowserView } from "./browserView";
+import { ShowOptions, BrowserView, BROWSER_VIEW_TYPE } from "./browserView";
+
+interface WebViewPersistedState {
+    url?: string;
+}
 
 export class BrowserManager {
 
@@ -24,11 +28,17 @@ export class BrowserManager {
         this.registerWebviewListeners(view);
     }
 
-    public restore(panel: vscode.WebviewPanel, state: any): void {
-        const url = state?.url ?? "";
-        const view = BrowserView.restore(this.extensionUri, url, panel);
+    public restore(panel: vscode.WebviewPanel, state: WebViewPersistedState): Thenable<void> {
+        const url = state?.url;
+        if (!url) {
+            panel.dispose();
+            return Promise.resolve();
+        }
+        
+        const view = BrowserView.create(this.extensionUri, url, panel);
         this.registerWebviewListeners(view);
-        return;
+        
+        return Promise.resolve();
     }
 
     private registerWebviewListeners(view: BrowserView) {
@@ -42,8 +52,12 @@ export class BrowserManager {
     }
     
     public handleExtensionActivation(context: vscode.ExtensionContext) {
-        context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(BrowserView.viewType, {
-            deserializeWebviewPanel: async (panel, state) => this.restore(panel, state)
-        }));
+        context.subscriptions.push(
+            vscode.window.registerWebviewPanelSerializer(
+            BROWSER_VIEW_TYPE, {
+                    deserializeWebviewPanel: this.restore.bind(this)
+                }
+            )
+        );
     }
 }
