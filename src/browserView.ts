@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import { EXTENSION_ID } from "./extension";
+import * as nodeCrypto from "crypto";
 
 export interface ShowOptions {
-    readonly preserveFocus?: boolean;
     readonly viewColumn?: vscode.ViewColumn;
 }
 
@@ -11,13 +11,27 @@ enum FromWebViewMessageType {
 }
 
 enum ToWebViewMessageType {
-    FocusIndicatorLockEnabledStateChanged = "didChangeFocusLockIndicatorEnabled"
+    FocusIndicatorLockEnabledStateChanged = "didChangeFocusLockIndicatorEnabled",
+    NavigateToUrl = "navigate-to-url"
 }
 
 const BROWSER_TITLE: string = "Inner Loop Buddy Browser";
 const FOCUS_LOCK_SETTING_SECTION = "focusLockIndicator.enabled";
-
 export const BROWSER_VIEW_TYPE = `${EXTENSION_ID}.browser.view`;
+
+function escapeAttribute(value: string | vscode.Uri): string {
+    return value.toString().replace(/"/g, "&quot;");
+}
+
+function getNonce(): string {
+    var actualCrypto = global.crypto ?? <Crypto>nodeCrypto.webcrypto;
+
+    var values = new Uint8Array(64);
+    actualCrypto.getRandomValues(values);
+    var x = values[1];
+
+    return values.reduce<string>((p, v) => p += v.toString(16), "");
+}
 
 export class BrowserView {
     private disposables: vscode.Disposable[] = [];
@@ -35,7 +49,7 @@ export class BrowserView {
                 BROWSER_VIEW_TYPE,
                 BROWSER_TITLE, {
                 viewColumn: showOptions?.viewColumn ?? vscode.ViewColumn.Active,
-                preserveFocus: showOptions?.preserveFocus
+                preserveFocus: true
             }, {
                 enableScripts: true,
                 enableForms: true,
@@ -71,9 +85,7 @@ export class BrowserView {
                 try {
                     const url = vscode.Uri.parse(payload.url);
                     vscode.env.openExternal(url);
-                } catch {
-                    // Noop
-                }
+                } catch { /* Noop */ }
                 break;
             
             default:
@@ -110,9 +122,9 @@ export class BrowserView {
 
                 <meta http-equiv="Content-Security-Policy" content="
                     default-src 'none';
-                    font-src ${this.webViewPanel.webview.cspSource};
-                    style-src ${this.webViewPanel.webview.cspSource};
-                    script-src 'nonce-${nonce}';
+                    font-src 'nonce-${nonce}';
+                    style-src-elem 'nonce-${nonce}';
+                    script-src-elem 'nonce-${nonce}';
                     frame-src *;
                     ">
 
@@ -121,7 +133,7 @@ export class BrowserView {
             focusLockEnabled: configuration.get<boolean>(FOCUS_LOCK_SETTING_SECTION, true)
         }))}">
 
-                <link rel="stylesheet" type="text/css" href="${mainCss}">
+                <link rel="stylesheet" type="text/css" href="${mainCss}" nonce="${nonce}">
             </head>
             <body>
                 <header class="header">
@@ -144,7 +156,7 @@ export class BrowserView {
                     <nav class="controls">
                         <button
                             title="Open in system browser"
-                            class="open-external-button icon"><i class="codicon codicon-link-external"></i></button>
+                            class="open-external-button icon"><i class="codicon codicon-link-external">external</i></button>
                     </nav>
                 </header>
                 <div class="content">
@@ -169,20 +181,17 @@ export class BrowserView {
     }
 
     public show(url: string, options?: ShowOptions) {
-        this.webViewPanel.webview.html = this.getHtml(url);
-        this.webViewPanel.reveal(options?.viewColumn, options?.preserveFocus);
-    }
-}
+        if (!this.webViewPanel.webview.html) {
+            this.webViewPanel.webview.html = this.getHtml(url);
+        } else {
+            this.webViewPanel.webview.postMessage({
+                type: ToWebViewMessageType.NavigateToUrl,
+                url: url
+            });
 
-function escapeAttribute(value: string | vscode.Uri): string {
-    return value.toString().replace(/"/g, "&quot;");
-}
+            options = undefined;
+        }
 
-function getNonce() {
-    let text = "";
-    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for (let i = 0; i < 64; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
+        this.webViewPanel.reveal(options?.viewColumn, true);
     }
-    return text;
 }

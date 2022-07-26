@@ -1,8 +1,8 @@
 :root {
     --container-paddding: 20px;
-    --input-padding-vertical: 2px;
-    --input-padding-horizontal: 4px;
-    --input-margin-vertical: 4px;
+    --input-padding-vertical: 8px;
+    --input-padding-horizontal: 8px;
+    --input-margin-vertical: 8px;
     --input-margin-horizontal: 0;
 }
 
@@ -19,8 +19,7 @@ body {
     grid-template-rows: auto 1fr;
 }
 
-input:not([type="checkbox"]),
-textarea {
+input:not([type="checkbox"]) {
     display: block;
     width: 100%;
     border: none;
@@ -29,22 +28,26 @@ textarea {
     padding: var(--input-padding-vertical) var(--input-padding-horizontal);
     color: var(--vscode-input-foreground);
     outline-color: var(--vscode-input-border);
+    border-radius: 4px;
+
+    outline-offset: -1px;
     background-color: var(--vscode-input-background);
 }
 
-input::placeholder,
-textarea::placeholder {
+input::placeholder {
     color: var(--vscode-input-placeholderForeground);
 }
 
 button {
     border: none;
-    padding: 3px;
+    padding: var(--input-padding-vertical) var(--input-padding-horizontal);
     text-align: center;
     outline: 1px solid transparent;
     color: var(--vscode-icon-foreground);
     background: none;
-    border-radius: 5px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center; 
 }
 
 button:hover:not(:disabled) {
@@ -58,13 +61,20 @@ button:disabled {
 }
 
 input:focus,
+input:hover:focus,
 button:focus {
     outline-color: var(--vscode-focusBorder);
 }
 
+input:hover {
+    outline-color: var(--vscode-inputOption-hoverBackground);
+    outline-style: solid;
+    outline-width: 1px;
+}
+
 .header {
     display: flex;
-    margin: 0.4em 1em;
+    margin: 0.4em 0.4em 0.4em 0.7em;
 }
 
 .url-input {

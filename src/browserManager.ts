@@ -35,7 +35,7 @@ export class BrowserManager {
             return Promise.resolve();
         }
         
-        const view = BrowserView.create(this.extensionUri, url, panel);
+        const view = BrowserView.create(this.extensionUri, url, undefined, panel);
         this.registerWebviewListeners(view);
         
         return Promise.resolve();
