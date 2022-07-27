@@ -11,6 +11,8 @@ enum FromHostMessageType {
     NavigateToUrl = "navigate-to-url"
 }
 
+const CACHE_BYPASS_PARAMETER_NAME = "ilbCacheBypassSecretParameter";
+
 function extractSettingsFromMetaTag(): { url: string; focusLockIndicator: boolean;  automaticBrowserCacheBypass: boolean } {
     const element = document.getElementById("browser-settings");
     if (element) {
@@ -34,7 +36,7 @@ function toggleAutomaticBrowserCacheBypassButton() {
 function resetAddressBarToCurrentIFrameValue()
 {
     const iframeUrl = new URL(contentIframe.src);
-    iframeUrl.searchParams.delete("vscodeBrowserReqId");
+    iframeUrl.searchParams.delete(CACHE_BYPASS_PARAMETER_NAME);
     locationBar.value = iframeUrl.toString();
 }
 
@@ -49,8 +51,8 @@ const reloadButton = document.querySelector<HTMLButtonElement>(".reload-button")
 const openExternalButton = document.querySelector<HTMLButtonElement>(".open-external-button")!;
 
 function navigateTo(url: URL): void {
-    if (url.searchParams.has("vscodeBrowserReqId")) {
-        url.searchParams.delete("vscodeBrowserReqId");
+    if (url.searchParams.has(CACHE_BYPASS_PARAMETER_NAME)) {
+        url.searchParams.delete(CACHE_BYPASS_PARAMETER_NAME);
     }
 
     var nakedUrl = url.toString();
@@ -60,7 +62,7 @@ function navigateTo(url: URL): void {
     // Try to bust the cache for the iframe There does not appear to be any way
     // to reliably do this except modifying the url
     if (settings.automaticBrowserCacheBypass) {
-        url.searchParams.append("vscodeBrowserReqId", Date.now().toString());
+        url.searchParams.append(CACHE_BYPASS_PARAMETER_NAME, Date.now().toString());
     }
 
     contentIframe.src = url.toString();
