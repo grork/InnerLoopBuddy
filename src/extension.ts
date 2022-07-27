@@ -2,9 +2,9 @@ import * as vscode from "vscode";
 import * as _ from "lodash";
 import * as monitor from "./taskmonitor";
 import { BrowserManager } from "./browserManager";
+import * as net from "net";
 
 export const EXTENSION_ID = "codevoid.inner-loop-buddy";
-
 export const DEFAULT_URL_SETTING_SECTION = "defaultUrl"
 export const MATCHED_TASK_BEHAVIOUR_SETTING_SECTION = "matchedTaskBehavior";
 export const OPEN_BROWSER_COMMAND_ID = `${EXTENSION_ID}.openDefaultUrl`;
@@ -13,8 +13,10 @@ export const START_CONFIGURE_TASK_CRITERIA_WIZARD_COMMAND_ID = `${EXTENSION_ID}.
 
 const AUTO_OPEN_DELAY_SETTING_SECTION = "autoOpenDelay";
 const EDITOR_COLUMN_SETTING_SECTION = "editorColumn";
-
+const PERFORM_AVAILABILITY_CHECK_SETTING_SECTION = "performAvailabilityCheckBeforeOpeningBrowser";
+const PERFORM_AVAILABILITY_CHECK_TIMEOUT_SETTING_SECTION = "performAvailabilityCheckBeforeOpeningBrowserTimeout";
 const SHOW_SETTINGS_BUTTON = "Configure in settings";
+const AVAILABILITY_CHECK_INCREMENT_MS = 100;
 
 /**
  * Tests don't want the extension doing it's "thing", but we can't explicitly
@@ -267,6 +269,46 @@ function displayPromptForConfiguringUrl(message: string) {
 }
 
 /**
+ * Given a host & port, will spin-wait(ish) until the host allows a socket to be
+ * opened. If the timeout is reached, then the host is considered unavailable
+ * @param host Host to connect to
+ * @param port Post to connect to on the host
+ * @param timeout total time in milliseconds to wait for availability
+ * @returns True if available, false if not
+ */
+async function waitForHostToBeAvailable(host: string, port: number, timeout: number): Promise<boolean> {
+    // Socket timeouts might be meaningful, and we'd like to only wait as long
+    // as we need to. So calculate the deadline, and use that
+    const deadline = Date.now() + timeout;
+
+    while (Date.now() < deadline) {
+        const available = await new Promise<boolean>((resolve) => {
+            const client = new net.Socket();
+            
+            // If there is any error, we'll consider the host unavailable
+            client.on("error", () => {
+                resolve(false);
+            });
+
+            // Attempt the connection; we assume it's available if we connect
+            client.connect({ host, port}, () => {
+                client.end();
+                resolve(true);
+            });
+        });
+
+        if (available) {
+            return true;
+        }
+        
+        // Wait a small amount of time before trying again.
+        await delay(AVAILABILITY_CHECK_INCREMENT_MS);
+    }
+
+    return false;
+}
+
+/**
  * Extension instance that manages the lifecycle of an extension in vscode.
  */
 export class InnerLoopBuddyExtension {
@@ -345,7 +387,7 @@ export class InnerLoopBuddyExtension {
      * @param scope Configuration scope to source the URL to open from
      * @returns True if successfully opened
      */
-    async openSimpleBrowser(scope: Maybe<vscode.ConfigurationScope>, autoOpenDelay: number = 0): Promise<boolean> {
+    async openSimpleBrowser(scope: Maybe<vscode.ConfigurationScope>, autoOpenDelay: number = 0, manuallyInvoked: boolean = false): Promise<boolean> {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID, scope);
         const defaultBrowserUrl = <string>config.get("defaultUrl");
         if (!defaultBrowserUrl) {
@@ -376,8 +418,29 @@ export class InnerLoopBuddyExtension {
             return false;
         }
 
+        // If configured to perform an availability check first, do so. But only
+        // if we were not manually invoked (E.g. user explicitly invokved the
+        // command)
+        if (config.get<boolean>(PERFORM_AVAILABILITY_CHECK_SETTING_SECTION, true) && !manuallyInvoked) {
+            let host = url.authority;
+            let port = (url.scheme === "http") ? 80 : 443; // Assume a default port
+            
+            // The authority includes the port, so we might need to extract that
+            if (host.indexOf(":") > -1) {
+                const parts = host.split(":");
+                host = parts[0];
+                port = parseInt(parts[1]);
+            }
+            
+            const serverAvailable = await waitForHostToBeAvailable(host, port, config.get<number>(PERFORM_AVAILABILITY_CHECK_TIMEOUT_SETTING_SECTION, 1000));
+            if (!serverAvailable) {
+                // Let the user know incase they made an error in the URL
+                displayPromptForConfiguringUrl("Target URL is unavailable, please check the URL");
+                return false;
+            }
+        }
+
         this.browserManager.show(url.toString(true), { viewColumn: apiViewColumn })
-        
         return true;
     }
 
@@ -497,7 +560,7 @@ export class InnerLoopBuddyExtension {
 export function activate(context: vscode.ExtensionContext) {
     const instance = new InnerLoopBuddyExtension(context);
 
-    context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION))));
+    context.subscriptions.push(vscode.commands.registerCommand(OPEN_BROWSER_COMMAND_ID, async () => instance.openSimpleBrowser(await getConfigurationScopeFromActiveEditor(DEFAULT_URL_SETTING_SECTION), undefined, true)));
     context.subscriptions.push(vscode.commands.registerCommand(PRINT_TASK_CRITERIA_COMMAND_ID, instance.printTaskCriteriaToChannel, instance));
     context.subscriptions.push(vscode.commands.registerCommand(START_CONFIGURE_TASK_CRITERIA_WIZARD_COMMAND_ID, instance.startTaskCriteriaWizard, instance));
 

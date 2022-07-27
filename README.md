@@ -25,14 +25,18 @@ It also lets you invoke a command manually to open the URL —  no need to type 
 ## Extension Settings
 All the extension settings are available in the VS Code settings UI. For reference, the extension contributes the following settings:
 
-| Key                                             | Notes                                                        |
-|-------------------------------------------------|--------------------------------------------------------------|
-| `codevoid.inner-loop-buddy.defaultUrl`          | URL to open when the command is invoked                      |
-| `codevoid.inner-loop-buddy.matchedTaskBehavior` | How often the browser should be triggered. `none` (No monitoring, manual only), `onetime` (Only the first time in a session the task is observed to start), `everytime` (Every time the task starts) |
-| `codevoid.inner-loop-buddy.taskMonitoringMode`  | Should the extension monitor for matching tasks (`matching`, the default), or `all` (Ignores matches, just any task execution). Useful if you don’t want to configure task matching rules. |
-| `codevoid.inner-loop-buddy.autoOpenDelay`       | Delay (in ms) before opening the browser. Opening the browser may be dependent on the server completing initialization. By setting this value to non-zero, the delay of opening the browser can be configured till after that initialization |
-| `codevoid.inner-loop-buddy.editorColumn`        | Editor column for the browser tab to open in. See the [VS Code Documenation](https://code.visualstudio.com/api/references/vscode-api#ViewColumn) for more details on the behaviour. Defaults to `Beside`. |
-| `codevoid.inner-loop-buddy.monitoredTasks`      | Array of object shapes that will be used to find out if a task of interest has been executed. See below for more information. |
+| Key                                                                             | Notes                                                        |
+|---------------------------------------------------------------------------------|--------------------------------------------------------------|
+| `codevoid.inner-loop-buddy.defaultUrl`                                          | URL to open when the command is invoked                      |
+| `codevoid.inner-loop-buddy.matchedTaskBehavior`                                 | How often the browser should be triggered. `none` (No monitoring, manual only), `onetime` (Only the first time in a session the task is observed to start), `everytime` (Every time the task starts) |
+| `codevoid.inner-loop-buddy.taskMonitoringMode`                                  | Should the extension monitor for matching tasks (`matching`, the default), or `all` (Ignores matches, just any task execution). Useful if you don’t want to configure task matching rules. |
+| `codevoid.inner-loop-buddy.autoOpenDelay`                                       | Delay (in ms) before opening the browser. Opening the browser may be dependent on the server completing initialization. By setting this value to non-zero, the delay of opening the browser can be configured till after that initialization |
+| `codevoid.inner-loop-buddy.editorColumn`                                        | Editor column for the browser tab to open in. See the [VS Code Documenation](https://code.visualstudio.com/api/references/vscode-api#ViewColumn) for more details on the behaviour. Defaults to `Beside`. |
+| `codevoid.inner-loop-buddy.monitoredTasks`                                      | Array of object shapes that will be used to find out if a task of interest has been executed. See below for more information. |
+| `codevoid.inner-loop-buddy.performAvailabilityCheckBeforeOpeningBrowser`        | Preconnect to the target host when opening the browser, to ensure it's available |
+| `codevoid.inner-loop-buddy.performAvailabilityCheckBeforeOpeningBrowserTimeout` | Timeout for the availability check in milliseconds |
+| `codevoid.inner-loop-buddy.focusLockIndicator`                                  | Enable/disable the floating indicator that shows when the page is focused in the browser |
+| `codevoid.inner-loop-buddy.automaticBrowserCacheBypass`                         | Automatically append parameters to URLs in the simple browser to bypass the browser cache |
 
 ## Multi root support
 >If you are just using multiple independent folders, or a `code-workspace` with only one folder, you are golden. You can skip to the next section.

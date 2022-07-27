@@ -74,6 +74,18 @@
 						"scope": "resource",
 						"default": 0
 					},
+					"codevoid.inner-loop-buddy.performAvailabilityCheckBeforeOpeningBrowser": {
+						"type": "boolean",
+						"scope": "resource",
+						"default": true,
+						"description": "Preconnect to the target host when opening the browser, to ensure it's available"
+					},
+					"codevoid.inner-loop-buddy.performAvailabilityCheckBeforeOpeningBrowserTimeout": {
+						"type": "number",
+						"scope": "resource",
+						"default": 1000,
+						"description": "Timeout for the availability check in milliseconds"
+					},
 					"codevoid.inner-loop-buddy.editorColumn": {
 						"markdownDescription": "Editor column for the browser tab to open in. See the [VS Code Documenation](https://code.visualstudio.com/api/references/vscode-api#ViewColumn) for more details on the behaviour",
 						"type": "string",
