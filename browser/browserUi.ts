@@ -1,15 +1,17 @@
 const vscode = acquireVsCodeApi();
 
 enum ToHostMessageType {
-    OpenInSystemBrowser = "open-in-system-browser"
+    OpenInSystemBrowser = "open-in-system-browser",
+    AutomaticBrowserCacheBybassStateChanged = "automatic-browser-cache-bypass-setting-changed"
 }
 
 enum FromHostMessageType {
     FocusIndicatorLockEnabledStateChanged = "focus-lock-indicator-setting-changed",
+    AutomaticBrowserCacheBybassStateChanged = "automatic-browser-cache-bypass-setting-changed",
     NavigateToUrl = "navigate-to-url"
 }
 
-function getSettings() {
+function extractSettingsFromMetaTag(): { url: string; focusLockIndicator: boolean;  automaticBrowserCacheBypass: boolean } {
     const element = document.getElementById("browser-settings");
     if (element) {
         const data = element.getAttribute("data-settings");
@@ -21,16 +23,28 @@ function getSettings() {
     throw new Error(`Could not load settings`);
 }
 
-function toggleFocusLockIndicatorEnabled(enabled: boolean) {
-    document.body.classList.toggle("enable-focus-lock-indicator", enabled);
+function toggleFocusLockIndicator() {
+    document.body.classList.toggle("enable-focus-lock-indicator", settings.focusLockIndicator);
 }
 
-const settings = getSettings();
+function toggleAutomaticBrowserCacheBypassButton() {
+    bypassCacheCheckbox.checked = settings.automaticBrowserCacheBypass;
+}
+
+function resetAddressBarToCurrentIFrameValue()
+{
+    const iframeUrl = new URL(contentIframe.src);
+    iframeUrl.searchParams.delete("vscodeBrowserReqId");
+    locationBar.value = iframeUrl.toString();
+}
+
+const settings = extractSettingsFromMetaTag();
 
 const contentIframe = document.querySelector("iframe")!;
 const locationBar = document.querySelector<HTMLInputElement>(".url-input")!;
 const forwardButton = document.querySelector<HTMLButtonElement>(".forward-button")!;
 const backButton = document.querySelector<HTMLButtonElement>(".back-button")!;
+const bypassCacheCheckbox = document.querySelector<HTMLInputElement>("#bypassCacheCheckbox")!;
 const reloadButton = document.querySelector<HTMLButtonElement>(".reload-button")!;
 const openExternalButton = document.querySelector<HTMLButtonElement>(".open-external-button")!;
 
@@ -45,7 +59,9 @@ function navigateTo(url: URL): void {
     
     // Try to bust the cache for the iframe There does not appear to be any way
     // to reliably do this except modifying the url
-    url.searchParams.append("vscodeBrowserReqId", Date.now().toString());
+    if (settings.automaticBrowserCacheBypass) {
+        url.searchParams.append("vscodeBrowserReqId", Date.now().toString());
+    }
 
     contentIframe.src = url.toString();
 }
@@ -53,24 +69,23 @@ function navigateTo(url: URL): void {
 window.addEventListener("message", e => {
     switch (e.data.type) {
         case FromHostMessageType.FocusIndicatorLockEnabledStateChanged:
-            toggleFocusLockIndicatorEnabled(e.data.enabled);
+            settings.focusLockIndicator = e.data.focusLockIndicator;
+            toggleFocusLockIndicator();
             break;
         
         case FromHostMessageType.NavigateToUrl:
             navigateTo(e.data.url);
             break;
+        
+        case FromHostMessageType.AutomaticBrowserCacheBybassStateChanged:
+            settings.automaticBrowserCacheBypass = e.data.automaticBrowserCacheBypass;
+            toggleAutomaticBrowserCacheBypassButton();
+            break;
     }
 });
 
-function resetAddressBarToCurrentIFrameValue()
-{
-    const iframeUrl = new URL(contentIframe.src);
-    iframeUrl.searchParams.delete("vscodeBrowserReqId");
-    locationBar.value = iframeUrl.toString();
-}
-
 document.addEventListener("DOMContentLoaded", () => {
-    toggleFocusLockIndicatorEnabled(settings.focusLockIndicatorEnabled);
+    toggleFocusLockIndicator();
 
     setInterval(() => {
         const iframeFocused = document.activeElement?.tagName === "IFRAME";
@@ -105,6 +120,14 @@ document.addEventListener("DOMContentLoaded", () => {
         
         navigateTo(parsedUrl!);
     });
+
+    bypassCacheCheckbox?.addEventListener("change", (e) => {
+        const isChecked = (<HTMLInputElement>e.target).checked;
+        vscode.postMessage({
+            type: ToHostMessageType.AutomaticBrowserCacheBybassStateChanged,
+            automaticBrowserCacheBypass: isChecked
+        });
+    })
 
     // Using history.go(0) does not seem to trigger what we want (reload the
     // iframe. So, we ask the page to navigate to itself again. This incorrectly

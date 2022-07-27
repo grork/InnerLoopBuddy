@@ -134,12 +134,20 @@
 							"Open every time a matching task is started"
 						]
 					},
-					"codevoid.inner-loop-buddy.focusLockIndicator.enabled": {
+					"codevoid.inner-loop-buddy.focusLockIndicator": {
 						"type": "boolean",
 						"default": true,
+						"scope": "window",
 						"title": "Focus Lock Indicator Enabled",
 						"description": "Enable/disable the floating indicator that shows when the page is focused in the browser"
-					  }
+					},
+					"codevoid.inner-loop-buddy.automaticBrowserCacheBypass": {
+						"type": "boolean",
+						"scope": "window",
+						"default": true,
+						"title": "Automatically append parameters to URLs in the simple browser to bypass the browser cache",
+						"description": "We are unable to clear VS Code's browser cache, so we automatically append a parameter to the URL to force bypassing of the cache"
+					}
 				}
 			}
 		]

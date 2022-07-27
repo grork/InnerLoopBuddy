@@ -38,7 +38,9 @@ input::placeholder {
     color: var(--vscode-input-placeholderForeground);
 }
 
-button {
+button,
+label,
+input[type="checkbox"] {
     border: none;
     padding: var(--input-padding-vertical) var(--input-padding-horizontal);
     text-align: center;
@@ -83,6 +85,7 @@ input:hover {
 
 .controls {
     display: flex;
+    align-items: center;
 }
 
 .controls button {

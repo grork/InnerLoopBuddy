@@ -7,16 +7,19 @@ export interface ShowOptions {
 }
 
 enum FromWebViewMessageType {
-    OpenInSystemBrowser = "open-in-system-browser"
+    OpenInSystemBrowser = "open-in-system-browser",
+    AutomaticBrowserCacheBybassStateChanged = "automatic-browser-cache-bypass-setting-changed"
 }
 
 enum ToWebViewMessageType {
     FocusIndicatorLockEnabledStateChanged = "focus-lock-indicator-setting-changed",
+    AutomaticBrowserCacheBybassStateChanged = "automatic-browser-cache-bypass-setting-changed",
     NavigateToUrl = "navigate-to-url"
 }
 
 const BROWSER_TITLE: string = "Inner Loop Buddy Browser";
-const FOCUS_LOCK_SETTING_SECTION = "focusLockIndicator.enabled";
+const FOCUS_LOCK_SETTING_SECTION = "focusLockIndicator";
+const AUTOMATIC_BROWSER_CACHE_BYPASS_SETTING_SECTION = "automaticBrowserCacheBypass";
 export const BROWSER_VIEW_TYPE = `${EXTENSION_ID}.browser.view`;
 
 function escapeAttribute(value: string | vscode.Uri): string {
@@ -78,13 +81,17 @@ export class BrowserView {
         this.show(url);
     }
 
-    private handleWebViewMessage(payload: { type: FromWebViewMessageType, url: string }) {
+    private handleWebViewMessage(payload: { type: FromWebViewMessageType, url?: string, automaticBrowserCacheBypass?: boolean }) {
         switch (payload.type) {
             case FromWebViewMessageType.OpenInSystemBrowser:
                 try {
-                    const url = vscode.Uri.parse(payload.url);
+                    const url = vscode.Uri.parse(payload.url!);
                     vscode.env.openExternal(url);
                 } catch { /* Noop */ }
+                break;
+            
+            case FromWebViewMessageType.AutomaticBrowserCacheBybassStateChanged:
+                vscode.workspace.getConfiguration(EXTENSION_ID).update(AUTOMATIC_BROWSER_CACHE_BYPASS_SETTING_SECTION, payload.automaticBrowserCacheBypass);
                 break;
             
             default:
@@ -94,16 +101,21 @@ export class BrowserView {
     }
 
     private handleConfigurationChanged(e: vscode.ConfigurationChangeEvent) {
-        if (!e.affectsConfiguration(`${EXTENSION_ID}.${FOCUS_LOCK_SETTING_SECTION}`)) {
-            // Not of interest to us
-            return;
+        const configuration = vscode.workspace.getConfiguration(EXTENSION_ID);
+
+        if (e.affectsConfiguration(`${EXTENSION_ID}.${FOCUS_LOCK_SETTING_SECTION}`)) {
+            this.webViewPanel.webview.postMessage({
+                type: ToWebViewMessageType.FocusIndicatorLockEnabledStateChanged,
+                focusLockIndicator: configuration.get<boolean>(FOCUS_LOCK_SETTING_SECTION, true)
+            });
         }
 
-        const configuration = vscode.workspace.getConfiguration(EXTENSION_ID);
-        this.webViewPanel.webview.postMessage({
-            type: ToWebViewMessageType,
-            focusLockEnabled: configuration.get<boolean>(FOCUS_LOCK_SETTING_SECTION, true)
-        });
+        if (e.affectsConfiguration(`${EXTENSION_ID}.${AUTOMATIC_BROWSER_CACHE_BYPASS_SETTING_SECTION}`)) {
+            this.webViewPanel.webview.postMessage({
+                type: ToWebViewMessageType.AutomaticBrowserCacheBybassStateChanged,
+                automaticBrowserCacheBypass: configuration.get<boolean>(AUTOMATIC_BROWSER_CACHE_BYPASS_SETTING_SECTION, true)
+            });
+        }
     }
 
     private getHtml(url: string) {
@@ -113,6 +125,7 @@ export class BrowserView {
 
         const mainJs = this.extensionResourceUrl("out/browser", "browserUi.js");
         const mainCss = this.extensionResourceUrl("out/browser", "styles.css");
+        const automaticBrowserBypass = configuration.get<boolean>(AUTOMATIC_BROWSER_CACHE_BYPASS_SETTING_SECTION, true);
 
         return /* html */ `<!DOCTYPE html>
             <html>
@@ -129,7 +142,8 @@ export class BrowserView {
 
                 <meta id="browser-settings" data-settings="${escapeAttribute(JSON.stringify({
                     url: url,
-                    focusLockEnabled: configuration.get<boolean>(FOCUS_LOCK_SETTING_SECTION, true)
+                    focusLockIndiciatorEnabled: configuration.get<boolean>(FOCUS_LOCK_SETTING_SECTION, true),
+                    automaticBrowserCacheBypass: automaticBrowserBypass
                 }))}">
 
                 <link rel="stylesheet" type="text/css" href="${mainCss}" nonce="${nonce}">
@@ -149,6 +163,8 @@ export class BrowserView {
                     <input class="url-input" type="text">
 
                     <nav class="controls">
+                        <input id="bypassCacheCheckbox" type="checkbox" ${automaticBrowserBypass ? "checked" : ""}>
+                        <label for="bypassCacheCheckbox">Bypass cache</label>
                         <button
                             title="Reload"
                             class="reload-button icon">reload</button>
