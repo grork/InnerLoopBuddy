@@ -27,36 +27,27 @@ function toggleFocusLockIndicatorEnabled(enabled: boolean) {
 
 const settings = getSettings();
 
-const iframe = document.querySelector("iframe")!;
-const header = document.querySelector(".header")!;
-const input = header.querySelector<HTMLInputElement>(".url-input")!;
-const forwardButton = header.querySelector<HTMLButtonElement>(".forward-button")!;
-const backButton = header.querySelector<HTMLButtonElement>(".back-button")!;
-const reloadButton = header.querySelector<HTMLButtonElement>(".reload-button")!;
-const openExternalButton = header.querySelector<HTMLButtonElement>(".open-external-button")!;
+const contentIframe = document.querySelector("iframe")!;
+const locationBar = document.querySelector<HTMLInputElement>(".url-input")!;
+const forwardButton = document.querySelector<HTMLButtonElement>(".forward-button")!;
+const backButton = document.querySelector<HTMLButtonElement>(".back-button")!;
+const reloadButton = document.querySelector<HTMLButtonElement>(".reload-button")!;
+const openExternalButton = document.querySelector<HTMLButtonElement>(".open-external-button")!;
 
-function navigateTo(rawUrl: string): void {
-    let url: URL;
-    try {
-        url = new URL(rawUrl);
-    } catch {
-        // If it's not a valid URL, we aren't going to do anything with it.
-        return;
-    }
-
+function navigateTo(url: URL): void {
     if (url.searchParams.has("vscodeBrowserReqId")) {
         url.searchParams.delete("vscodeBrowserReqId");
     }
 
     var nakedUrl = url.toString();
     vscode.setState({ url: nakedUrl });
-    input.value = nakedUrl;
+    locationBar.value = nakedUrl;
     
     // Try to bust the cache for the iframe There does not appear to be any way
     // to reliably do this except modifying the url
     url.searchParams.append("vscodeBrowserReqId", Date.now().toString());
 
-    iframe.contentWindow!.location = url.toString();
+    contentIframe.src = url.toString();
 }
 
 window.addEventListener("message", e => {
@@ -71,6 +62,13 @@ window.addEventListener("message", e => {
     }
 });
 
+function resetAddressBarToCurrentIFrameValue()
+{
+    const iframeUrl = new URL(contentIframe.src);
+    iframeUrl.searchParams.delete("vscodeBrowserReqId");
+    locationBar.value = iframeUrl.toString();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     toggleFocusLockIndicatorEnabled(settings.focusLockIndicatorEnabled);
 
@@ -79,23 +77,50 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.classList.toggle("iframe-focused", iframeFocused);
     }, 50);
 
-    input.addEventListener("change", e => navigateTo((e.target as HTMLInputElement).value));
+    locationBar.addEventListener("change", e => {
+        let rawUrl = (<HTMLInputElement>e.target).value;
+        let parsedUrl: URL | null = null;
+        
+        try {
+            parsedUrl = new URL(rawUrl);
+        } catch {
+            try {
+                if (!/^https?:\/\//.test(rawUrl)) {
+                    if (rawUrl.startsWith("localhost/") || rawUrl.startsWith("localhost:")) {
+                        // default to http
+                        rawUrl = "http://" + rawUrl;
+                    } else {
+                        rawUrl = "https://" + rawUrl;
+                    }
+
+                    parsedUrl = new URL(rawUrl);
+                }
+            } catch { /* Not parsable */ }
+        }
+
+        if (!parsedUrl || (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:")) {
+            resetAddressBarToCurrentIFrameValue();
+            return;
+        }
+        
+        navigateTo(parsedUrl!);
+    });
 
     // Using history.go(0) does not seem to trigger what we want (reload the
     // iframe. So, we ask the page to navigate to itself again. This incorrectly
     // adds entries to the history but does reload. It also always incorrectly
     // always loads the value of the last exilicit location change of the iframe
     // which may not match the currently displayed page if they've navigated.
-    reloadButton.addEventListener("click", () => navigateTo(iframe.src));
+    reloadButton.addEventListener("click", () => navigateTo(new URL(contentIframe.src)));
     forwardButton.addEventListener("click", () => history.forward());
     backButton.addEventListener("click", () => history.back());
 
     openExternalButton.addEventListener("click", () => {
         vscode.postMessage({
             type: ToHostMessageType.OpenInSystemBrowser,
-            url: input.value
+            url: locationBar.value
         });
     });
 
-    navigateTo(settings.url);
+    navigateTo(new URL(settings.url));
 });

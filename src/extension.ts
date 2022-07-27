@@ -249,6 +249,24 @@ async function getGroupedQuickPickItemsForTasks(): Promise<[(vscode.QuickPickIte
 }
 
 /**
+ * Displays a warning message with the supplied message + button to take the
+ * user to setting to configure th URL
+ * @param message Message to display
+ */
+function displayPromptForConfiguringUrl(message: string) {
+    vscode.window.showWarningMessage(message, SHOW_SETTINGS_BUTTON).then((result) => {
+        if (result === SHOW_SETTINGS_BUTTON) {
+            // Show the settings page prefiltered to our settings
+            vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", { "query": `${EXTENSION_ID}.${DEFAULT_URL_SETTING_SECTION}` });
+            return;
+        }
+
+        // Dismissed, so do nothing
+        return;
+    });
+}
+
+/**
  * Extension instance that manages the lifecycle of an extension in vscode.
  */
 export class InnerLoopBuddyExtension {
@@ -331,16 +349,7 @@ export class InnerLoopBuddyExtension {
         const config = vscode.workspace.getConfiguration(EXTENSION_ID, scope);
         const defaultBrowserUrl = <string>config.get("defaultUrl");
         if (!defaultBrowserUrl) {
-            vscode.window.showInformationMessage("No default URL configured", SHOW_SETTINGS_BUTTON).then((result) => {
-                if (result === SHOW_SETTINGS_BUTTON) {
-                    // Show the settings page prefiltered to our settings
-                    vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", { "query": `${EXTENSION_ID}.${DEFAULT_URL_SETTING_SECTION}` });
-                    return;
-                }
-
-                // Dismissed, so do nothing
-                return;
-            });
+            displayPromptForConfiguringUrl("No default URL configured");
 
             return false;
         }
@@ -353,10 +362,21 @@ export class InnerLoopBuddyExtension {
         if (autoOpenDelay) {
             await delay(autoOpenDelay);
         }
+        
+        let url: vscode.Uri | null = null;
+        try
+        {
+            url = vscode.Uri.parse(defaultBrowserUrl, true);
+        }
+        catch {/* nop */ }
+        
+        if (!url || (url.scheme !== "http" && url.scheme != "https")) {
+            // We can't handle non-http URLs
+            displayPromptForConfiguringUrl("Default URL must be a valid HTTP or HTTPS URL");
+            return false;
+        }
 
-        const url = vscode.Uri.parse(defaultBrowserUrl).toString(true)
-
-        this.browserManager.show(url, { viewColumn: apiViewColumn })
+        this.browserManager.show(url.toString(true), { viewColumn: apiViewColumn })
         
         return true;
     }
