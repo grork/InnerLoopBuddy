@@ -5,7 +5,7 @@ enum ToHostMessageType {
 }
 
 enum FromHostMessageType {
-    FocusIndicatorLockEnabledStateChanged = "didChangeFocusLockIndicatorEnabled",
+    FocusIndicatorLockEnabledStateChanged = "focus-lock-indicator-setting-changed",
     NavigateToUrl = "navigate-to-url"
 }
 
@@ -52,8 +52,8 @@ function navigateTo(rawUrl: string): void {
     vscode.setState({ url: nakedUrl });
     input.value = nakedUrl;
     
-    // Try to bust the cache for the iframe
-    // There does not appear to be any way to reliably do this except modifying the url
+    // Try to bust the cache for the iframe There does not appear to be any way
+    // to reliably do this except modifying the url
     url.searchParams.append("vscodeBrowserReqId", Date.now().toString());
 
     iframe.contentWindow!.location = url.toString();

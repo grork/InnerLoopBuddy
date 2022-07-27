@@ -11,7 +11,7 @@ enum FromWebViewMessageType {
 }
 
 enum ToWebViewMessageType {
-    FocusIndicatorLockEnabledStateChanged = "didChangeFocusLockIndicatorEnabled",
+    FocusIndicatorLockEnabledStateChanged = "focus-lock-indicator-setting-changed",
     NavigateToUrl = "navigate-to-url"
 }
 
@@ -24,11 +24,10 @@ function escapeAttribute(value: string | vscode.Uri): string {
 }
 
 function getNonce(): string {
-    var actualCrypto = global.crypto ?? <Crypto>nodeCrypto.webcrypto;
+    const actualCrypto = global.crypto ?? <Crypto>nodeCrypto.webcrypto;
 
-    var values = new Uint8Array(64);
+    const values = new Uint8Array(64);
     actualCrypto.getRandomValues(values);
-    var x = values[1];
 
     return values.reduce<string>((p, v) => p += v.toString(16), "");
 }
@@ -129,9 +128,9 @@ export class BrowserView {
                     ">
 
                 <meta id="browser-settings" data-settings="${escapeAttribute(JSON.stringify({
-            url: url,
-            focusLockEnabled: configuration.get<boolean>(FOCUS_LOCK_SETTING_SECTION, true)
-        }))}">
+                    url: url,
+                    focusLockEnabled: configuration.get<boolean>(FOCUS_LOCK_SETTING_SECTION, true)
+                }))}">
 
                 <link rel="stylesheet" type="text/css" href="${mainCss}" nonce="${nonce}">
             </head>
@@ -144,19 +143,18 @@ export class BrowserView {
 
                         <button
                             title="Forward"
-                            class="forward-button icon">forward</i></button>
-
-                        <button
-                            title="Reload"
-                            class="reload-button icon">reload</i></button>
+                            class="forward-button icon">forward</button>
                     </nav>
 
                     <input class="url-input" type="text">
 
                     <nav class="controls">
                         <button
+                            title="Reload"
+                            class="reload-button icon">reload</button>
+                        <button
                             title="Open in system browser"
-                            class="open-external-button icon"><i class="codicon codicon-link-external">external</i></button>
+                            class="open-external-button icon">external</button>
                     </nav>
                 </header>
                 <div class="content">
