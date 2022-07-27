@@ -55,7 +55,7 @@ function navigateTo(url: URL): void {
         url.searchParams.delete(CACHE_BYPASS_PARAMETER_NAME);
     }
 
-    var nakedUrl = url.toString();
+    const nakedUrl = url.toString();
     vscode.setState({ url: nakedUrl });
     locationBar.value = nakedUrl;
     
