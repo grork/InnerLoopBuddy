@@ -8,4 +8,8 @@
 !LICENSE.txt
 !out/extension.js
 !out/taskmonitor.js
+!out/browserManager.js
+!out/browserView.js
+!out/browser/browserUi.js
+!out/browser/styles.css
 !assets/package_icon.png
