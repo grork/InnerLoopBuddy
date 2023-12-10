@@ -1,15 +1,14 @@
 {
   "name": "codevoid.inner-loop-buddy.test",
   "version": "0.0.1",
+  "type": "module",
   "description": "Sample Workspace for Inner Loop Buddy Tests",
   "scripts": {
-    "build": "copyfiles index.html output && copyfiles test.json output",
-    "serve": "browser-sync start --server output --watch --no-ui --listen localhost --no-online --no-open --reload-debounce 250"
+    "serve": "vite"
   },
   "author": "Dominic Hopton",
   "license": "MIT",
   "devDependencies": {
-    "browser-sync": "^2.27.9",
-    "copyfiles": "^2.4.1"
+    "vite": "^5.0.0"
   }
 }

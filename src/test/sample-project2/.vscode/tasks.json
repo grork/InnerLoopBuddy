@@ -39,26 +39,6 @@
         },
         {
             "type": "npm",
-            "script": "build",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [ ],
-            "label": "build2",
-            "detail": "Copies output files to the output folder",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": false,
-                "clear": false
-            },
-            "dependsOn": [ "install2" ]
-        },
-        {
-            "type": "npm",
             "label": "serve2",
             "detail": "Serve files with automatic browser loading",
             "script": "serve",
@@ -74,7 +54,7 @@
             "runOptions": {
                 "runOn": "folderOpen"
             },
-            "dependsOn": [ "build2" ]
+            "dependsOn": [ "install2" ]
         },
     ]
 }
