@@ -269,6 +269,33 @@ function displayPromptForConfiguringUrl(message: string) {
 }
 
 /**
+ * Wraps setting up a socket to check if a port is listening, returns a promise
+ * which completes with success or failure (but does not fail the promise)
+ * @param host Host name to connect to
+ * @param port Port to connect to
+ * @param family IP family to use (4, 6)
+ * 
+ * @returns Promise that completes when the socket has accepted or rejected the
+ *          connection
+ */
+function checkSocket(host: string, port: number, family: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+        const client = new net.Socket();
+            
+        // If there is any error, we'll consider the host unavailable
+        client.on("error", () => {
+            resolve(false);
+        });
+
+        // Attempt the connection; we assume it's available if we connect
+        client.connect({ host, port, family }, () => {
+            client.end();
+            resolve(true);
+        });
+    });
+}
+
+/**
  * Given a host & port, will spin-wait(ish) until the host allows a socket to be
  * opened. If the timeout is reached, then the host is considered unavailable
  * @param host Host to connect to
@@ -282,22 +309,22 @@ async function waitForHostToBeAvailable(host: string, port: number, timeout: num
     const deadline = Date.now() + timeout;
 
     while (Date.now() < deadline) {
-        const available = await new Promise<boolean>((resolve) => {
-            const client = new net.Socket();
-            
-            // If there is any error, we'll consider the host unavailable
-            client.on("error", () => {
-                resolve(false);
-            });
+        // Various node versions, and the wild west of user configuration means
+        // that we can't assume that the target is located on IPv4 only, or IPv6
+        // We could ask them to declare it, but that seems wonky. So, we're
+        // going to check IPv4, and if thats not successful, try IPv6. We'll do
+        // this in the loop to give the target time to start up enough to accept
+        // connections
+        const available4 = await checkSocket(host, port, 4);
 
-            // Attempt the connection; we assume it's available if we connect
-            client.connect({ host, port}, () => {
-                client.end();
-                resolve(true);
-            });
-        });
+        if (available4) {
+            return true;
+        }
 
-        if (available) {
+        // If it failed, it might be listening on the IPv6, so check that before
+        // retrying
+        const available6 = await checkSocket(host, port, 6);
+        if (available6) {
             return true;
         }
         
